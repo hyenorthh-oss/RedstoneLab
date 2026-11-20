@@ -13,9 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.redstonelab.app.engine.RedstoneSimulator
+import com.redstonelab.app.engine.RedstoneEngine
 import com.redstonelab.app.engine.SimulationState
-import com.redstonelab.app.exporter.BedrockPackExporter
+import com.redstonelab.app.exporter.McpackExporter
 import com.redstonelab.app.model.BlockCoord
 import com.redstonelab.app.model.BlockState
 import com.redstonelab.app.model.BlockType
@@ -23,40 +23,59 @@ import com.redstonelab.app.model.CircuitGrid
 import com.redstonelab.app.model.CircuitPreset
 import com.redstonelab.app.model.CircuitPresetsLibrary
 import com.redstonelab.app.model.Facing
+import com.redstonelab.app.storage.CircuitProjectMetadata
+import com.redstonelab.app.storage.ProjectManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.ArrayDeque
+import java.util.UUID
 
-enum class EditorTool(val label: String) {
-    PLACE("Place"),
-    BREAK("Break"),
-    INTERACT("Interact"),
-    INSPECT("Inspect")
+enum class EditorMode {
+    BUILD,      // Construção: tocar coloca/substitui blocos
+    SIMULATION  // Simulação: tocar interage com alavancas, botões, etc.
+}
+
+enum class EditorTool {
+    PLACE,
+    ERASE,
+    INSPECT
 }
 
 class EditorViewModel : ViewModel() {
 
-    // Circuit Grid and Simulation Engine
+    // Estado do Circuito e Motor de Simulação
     var circuitGrid by mutableStateOf(CircuitGrid())
         private set
 
-    private var simulator = RedstoneSimulator(circuitGrid)
+    private var engine = RedstoneEngine(circuitGrid)
 
-    var circuitName by mutableStateOf("Repeater Clock")
+    var currentProjectId by mutableStateOf(UUID.randomUUID().toString())
         private set
 
-    // Editor Viewport States
-    var activeLayerZ by mutableIntStateOf(1)
+    var circuitName by mutableStateOf("Porta Secreta")
         private set
 
-    var isLayerIsolationEnabled by mutableStateOf(false)
+    // Modos de Operação
+    var editorMode by mutableStateOf(EditorMode.BUILD)
         private set
 
-    var selectedTool by mutableStateOf(EditorTool.INTERACT)
+    var selectedTool by mutableStateOf(EditorTool.PLACE)
         private set
 
+    // Camada e Visualização
+    var activeLayerY by mutableIntStateOf(1) // Altura Y (0 a 7+)
+        private set
+
+    var isOnionSkinEnabled by mutableStateOf(true)
+        private set
+
+    var showSignalNumbers by mutableStateOf(true)
+        private set
+
+    // Bloco Selecionado na Paleta
     var selectedBlockType by mutableStateOf(BlockType.REDSTONE_WIRE)
         private set
 
@@ -66,23 +85,79 @@ class EditorViewModel : ViewModel() {
     var selectedBlockCoord by mutableStateOf<BlockCoord?>(null)
         private set
 
-    var panOffset by mutableStateOf(Offset(500f, 600f))
+    // Transformações da Câmera Isométrica
+    var panOffset by mutableStateOf(Offset(450f, 400f))
     var zoom by mutableFloatStateOf(1.0f)
 
-    // Simulation Execution States
-    var simulationState by mutableStateOf(SimulationState())
+    // Simulação
+    var simulationState by mutableStateOf(SimulationState(tickRateHz = 10.0f))
         private set
 
     private var simulationJob: Job? = null
 
-    // Dialog Visibilities
+    // Pilhas de Histórico Undo / Redo
+    private val undoStack = ArrayDeque<String>()
+    private val redoStack = ArrayDeque<String>()
+
+    val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
+
+    // Modais e Diálogos
+    var showProjectsDialog by mutableStateOf(false)
     var showPresetsDialog by mutableStateOf(false)
     var showExportDialog by mutableStateOf(false)
-    var showHelpDialog by mutableStateOf(false)
+    var exportedPackFile by mutableStateOf<File?>(null)
+    var exportedSanitizedName by mutableStateOf("")
+
+    // Lista de Projetos Locais Offline
+    var localProjects by mutableStateOf<List<CircuitProjectMetadata>>(emptyList())
+        private set
 
     init {
-        // Load default preset on startup
-        loadPreset(CircuitPresetsLibrary.presets.first())
+        // Inicializa com base de pedra lisa na camada 0
+        clearToDefaultPlatform()
+        saveHistorySnapshot()
+    }
+
+    private fun saveHistorySnapshot() {
+        if (undoStack.size > 30) {
+            undoStack.removeLast()
+        }
+        undoStack.push(circuitGrid.toJson())
+        redoStack.clear()
+    }
+
+    fun undo() {
+        if (undoStack.isNotEmpty()) {
+            redoStack.push(circuitGrid.toJson())
+            val prevJson = undoStack.pop()
+            circuitGrid = CircuitGrid.fromJson(prevJson)
+            engine = RedstoneEngine(circuitGrid)
+            engine.recalculateWireSignals()
+            circuitGrid = circuitGrid.clone()
+        }
+    }
+
+    fun redo() {
+        if (redoStack.isNotEmpty()) {
+            undoStack.push(circuitGrid.toJson())
+            val nextJson = redoStack.pop()
+            circuitGrid = CircuitGrid.fromJson(nextJson)
+            engine = RedstoneEngine(circuitGrid)
+            engine.recalculateWireSignals()
+            circuitGrid = circuitGrid.clone()
+        }
+    }
+
+    // --- Alternância de Modos e Ferramentas ---
+
+    fun toggleEditorMode() {
+        editorMode = if (editorMode == EditorMode.BUILD) {
+            EditorMode.SIMULATION
+        } else {
+            pauseSimulation()
+            EditorMode.BUILD
+        }
     }
 
     fun setTool(tool: EditorTool) {
@@ -94,28 +169,29 @@ class EditorViewModel : ViewModel() {
         selectedTool = EditorTool.PLACE
     }
 
-    fun setLayer(z: Int) {
-        activeLayerZ = z.coerceIn(-5, 10)
+    fun setLayer(y: Int) {
+        activeLayerY = y.coerceIn(0, 15)
     }
 
-    fun toggleLayerIsolation() {
-        isLayerIsolationEnabled = !isLayerIsolationEnabled
+    fun toggleOnionSkin() {
+        isOnionSkinEnabled = !isOnionSkinEnabled
+    }
+
+    fun toggleSignalNumbers() {
+        showSignalNumbers = !showSignalNumbers
     }
 
     fun rotateFacingClockwise() {
         selectedFacing = selectedFacing.clockwise()
     }
 
-    fun setProjectName(name: String) {
-        circuitName = name
-    }
-
-    // --- Simulation Controls ---
+    // --- Controles de Simulação ---
 
     fun toggleSimulation() {
         if (simulationState.isRunning) {
             pauseSimulation()
         } else {
+            editorMode = EditorMode.SIMULATION
             startSimulation()
         }
     }
@@ -126,7 +202,7 @@ class EditorViewModel : ViewModel() {
         simulationJob = viewModelScope.launch {
             while (isActive && simulationState.isRunning) {
                 stepSingleTick()
-                val intervalMs = (1000f / simulationState.tickRateHz).toLong().coerceAtLeast(40L)
+                val intervalMs = (1000f / simulationState.tickRateHz).toLong().coerceAtLeast(50L)
                 delay(intervalMs)
             }
         }
@@ -140,13 +216,12 @@ class EditorViewModel : ViewModel() {
 
     fun stepSingleTick() {
         val start = System.currentTimeMillis()
-        simulator.stepTick()
+        engine.stepTick()
         val duration = System.currentTimeMillis() - start
 
-        // Refresh Compose state
         circuitGrid = circuitGrid.clone()
         simulationState = simulationState.copy(
-            totalTicks = simulator.tickCount,
+            totalTicks = engine.tickCount,
             activeSignalCount = circuitGrid.activeCount,
             lastStepDurationMs = duration
         )
@@ -154,7 +229,7 @@ class EditorViewModel : ViewModel() {
 
     fun resetSimulation() {
         pauseSimulation()
-        simulator.reset()
+        engine.reset()
         circuitGrid = circuitGrid.clone()
         simulationState = simulationState.copy(
             totalTicks = 0L,
@@ -162,21 +237,60 @@ class EditorViewModel : ViewModel() {
         )
     }
 
-    fun setTickRate(rateHz: Float) {
-        val clamped = rateHz.coerceIn(1.0f, 20.0f)
-        simulationState = simulationState.copy(tickRateHz = clamped)
-        if (simulationState.isRunning) {
-            startSimulation() // Restart loop with new interval
-        }
-    }
-
-    // --- Interactive Editing ---
+    // --- Interações do Usuário no Canvas ---
 
     fun onTileClicked(coord: BlockCoord, context: Context? = null) {
         selectedBlockCoord = coord
 
+        if (editorMode == EditorMode.SIMULATION) {
+            // No modo simulação: tocar interage com alavancas, botões, placas e sensores
+            val block = circuitGrid.get(coord) ?: return
+            var handled = false
+
+            when (block.type) {
+                BlockType.LEVER -> {
+                    circuitGrid.set(block.toggleLever())
+                    handled = true
+                }
+                BlockType.STONE_BUTTON -> {
+                    circuitGrid.set(block.triggerButton())
+                    handled = true
+                }
+                BlockType.STONE_PRESSURE_PLATE -> {
+                    circuitGrid.set(block.togglePressurePlate())
+                    handled = true
+                }
+                BlockType.DAYLIGHT_DETECTOR -> {
+                    circuitGrid.set(block.toggleDaylightDetector())
+                    handled = true
+                }
+                BlockType.SCULK_SENSOR -> {
+                    circuitGrid.set(block.triggerSculkSensor())
+                    handled = true
+                }
+                BlockType.REDSTONE_REPEATER -> {
+                    circuitGrid.set(block.cycleDelay())
+                    handled = true
+                }
+                BlockType.REDSTONE_COMPARATOR -> {
+                    circuitGrid.set(block.toggleSubtractMode())
+                    handled = true
+                }
+                else -> {}
+            }
+
+            if (handled) {
+                vibrate(context, 15)
+                engine.stepTick()
+                circuitGrid = circuitGrid.clone()
+            }
+            return
+        }
+
+        // Modo Construção
         when (selectedTool) {
             EditorTool.PLACE -> {
+                saveHistorySnapshot()
                 val newState = BlockState(
                     coord = coord,
                     type = selectedBlockType,
@@ -188,90 +302,122 @@ class EditorViewModel : ViewModel() {
                 refreshGridAndSimulate()
             }
 
-            EditorTool.BREAK -> {
-                circuitGrid.remove(coord)
-                vibrate(context, 25)
-                refreshGridAndSimulate()
-            }
-
-            EditorTool.INTERACT -> {
-                val block = circuitGrid.get(coord) ?: return
-                var handled = false
-
-                when (block.type) {
-                    BlockType.LEVER -> {
-                        circuitGrid.set(block.toggleLever())
-                        handled = true
-                    }
-                    BlockType.STONE_BUTTON -> {
-                        circuitGrid.set(block.triggerButton())
-                        handled = true
-                    }
-                    BlockType.REDSTONE_REPEATER -> {
-                        circuitGrid.set(block.cycleDelay())
-                        handled = true
-                    }
-                    BlockType.REDSTONE_COMPARATOR -> {
-                        circuitGrid.set(block.toggleSubtractMode())
-                        handled = true
-                    }
-                    else -> {}
-                }
-
-                if (handled) {
+            EditorTool.ERASE -> {
+                if (circuitGrid.get(coord) != null) {
+                    saveHistorySnapshot()
+                    circuitGrid.remove(coord)
                     vibrate(context, 20)
                     refreshGridAndSimulate()
                 }
             }
 
             EditorTool.INSPECT -> {
-                // Keep selectedBlockCoord highlighted
+                // Mantém coord selecionada para o painel de inspeção
             }
         }
     }
 
     fun onTileLongClicked(coord: BlockCoord, context: Context? = null) {
-        // Quick break on long press
-        val block = circuitGrid.get(coord)
-        if (block != null && block.type != BlockType.AIR) {
-            circuitGrid.remove(coord)
-            vibrate(context, 35)
-            refreshGridAndSimulate()
+        val block = circuitGrid.get(coord) ?: return
+
+        saveHistorySnapshot()
+        if (block.type.isInteractive) {
+            // Toque longo ajusta rapidamente repetidores/comparadores ou gira o bloco
+            when (block.type) {
+                BlockType.REDSTONE_REPEATER -> circuitGrid.set(block.cycleDelay())
+                BlockType.REDSTONE_COMPARATOR -> circuitGrid.set(block.toggleSubtractMode())
+                else -> {
+                    if (block.type.isDirectional) {
+                        circuitGrid.set(block.copy(facing = block.facing.clockwise()))
+                    }
+                }
+            }
+        } else if (block.type.isDirectional) {
+            circuitGrid.set(block.copy(facing = block.facing.clockwise()))
         }
+        vibrate(context, 30)
+        refreshGridAndSimulate()
     }
 
     private fun refreshGridAndSimulate() {
-        simulator.recalculateWireSignals()
+        engine.recalculateWireSignals()
         circuitGrid = circuitGrid.clone()
         simulationState = simulationState.copy(activeSignalCount = circuitGrid.activeCount)
+    }
+
+    fun clearToDefaultPlatform() {
+        pauseSimulation()
+        circuitGrid.clear()
+        // Plataforma padrão de pedra lisa 8x8 na camada 0
+        for (x in 4..11) {
+            for (z in 4..11) {
+                circuitGrid.set(BlockState(BlockCoord(x, 0, z), BlockType.SMOOTH_STONE))
+            }
+        }
+        engine = RedstoneEngine(circuitGrid)
+        refreshGridAndSimulate()
+        activeLayerY = 1
+    }
+
+    // --- Projetos Locais Offline ---
+
+    fun refreshProjectsList(context: Context) {
+        localProjects = ProjectManager.listProjects(context)
+    }
+
+    fun saveCurrentProject(context: Context, name: String) {
+        circuitName = name
+        ProjectManager.saveProject(context, currentProjectId, name, circuitGrid)
+        refreshProjectsList(context)
+    }
+
+    fun loadLocalProject(context: Context, id: String) {
+        val loaded = ProjectManager.loadProject(context, id) ?: return
+        pauseSimulation()
+        currentProjectId = id
+        circuitName = loaded.first
+        circuitGrid = loaded.second
+        engine = RedstoneEngine(circuitGrid)
+        refreshGridAndSimulate()
+        activeLayerY = 1
+    }
+
+    fun deleteLocalProject(context: Context, id: String) {
+        ProjectManager.deleteProject(context, id)
+        refreshProjectsList(context)
+    }
+
+    fun newProject() {
+        currentProjectId = UUID.randomUUID().toString()
+        circuitName = "Novo Circuito"
+        clearToDefaultPlatform()
+        saveHistorySnapshot()
     }
 
     fun loadPreset(preset: CircuitPreset) {
         pauseSimulation()
         circuitName = preset.title
+        currentProjectId = UUID.randomUUID().toString()
         circuitGrid = preset.builder()
-        simulator = RedstoneSimulator(circuitGrid)
+        engine = RedstoneEngine(circuitGrid)
         refreshGridAndSimulate()
-        panOffset = Offset(450f, 550f)
+        panOffset = Offset(450f, 400f)
         zoom = 1.0f
+        saveHistorySnapshot()
     }
 
-    fun clearCircuit() {
-        pauseSimulation()
-        circuitGrid.clear()
-        // Provide standard 5x5 stone platform at layer 0
-        for (x in 0..4) {
-            for (y in 0..4) {
-                circuitGrid.set(BlockState(BlockCoord(x, y, 0), BlockType.STONE))
-            }
-        }
-        simulator = RedstoneSimulator(circuitGrid)
-        refreshGridAndSimulate()
-        activeLayerZ = 1
-    }
+    // --- Exportação .mcpack ---
 
-    fun exportMcPack(context: Context): File {
-        return BedrockPackExporter.exportToCacheFile(context, circuitGrid, circuitName)
+    fun exportToMcpack(
+        context: Context,
+        name: String,
+        includeSmoothStoneBase: Boolean
+    ): File {
+        circuitName = name
+        val packFile = McpackExporter.saveMcpackFile(context, circuitGrid, name, includeSmoothStoneBase)
+        exportedPackFile = packFile
+        exportedSanitizedName = McpackExporter.sanitizeCircuitName(name)
+        return packFile
     }
 
     private fun vibrate(context: Context?, durationMs: Long) {
@@ -279,7 +425,9 @@ class EditorViewModel : ViewModel() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator?.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibratorManager?.defaultVibrator?.vibrate(
+                    VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
+                )
             } else {
                 @Suppress("DEPRECATION")
                 val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator

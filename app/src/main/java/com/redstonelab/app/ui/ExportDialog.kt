@@ -6,15 +6,13 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,45 +30,55 @@ import com.redstonelab.app.components.CyberBadge
 import com.redstonelab.app.components.GlassBox
 import com.redstonelab.app.components.GlassButton
 import com.redstonelab.app.components.GlassIconButton
-import com.redstonelab.app.exporter.BedrockPackExporter
+import com.redstonelab.app.exporter.McpackExporter
 import com.redstonelab.app.model.CircuitGrid
 import com.redstonelab.app.theme.*
+import java.io.File
 
 @Composable
 fun ExportDialog(
     grid: CircuitGrid,
-    initialPackName: String,
+    initialCircuitName: String,
+    onExportComplete: (File, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var packName by remember { mutableStateOf(initialPackName) }
+    var circuitNameInput by remember { mutableStateOf(initialCircuitName) }
+    var includeSmoothStoneBase by remember { mutableStateOf(true) }
+    var showCommandsPreview by remember { mutableStateOf(false) }
+
+    val sanitizedName = remember(circuitNameInput) {
+        McpackExporter.sanitizeCircuitName(circuitNameInput)
+    }
+
     val bounds = remember(grid) { grid.getBounds() }
     val totalBlocks = remember(grid) { grid.blockCount }
 
-    val mcfunctionScript = remember(grid) {
-        BedrockPackExporter.generateSpawnFunction(grid)
+    val mcfunctionScript = remember(grid, sanitizedName, includeSmoothStoneBase) {
+        McpackExporter.generateMcfunctionScript(grid, sanitizedName, includeSmoothStoneBase)
     }
 
+    // Modal de Exportação
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         GlassBox(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .fillMaxHeight(0.88f)
-                .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
+                .fillMaxWidth(0.88f)
+                .fillMaxHeight(0.90f)
+                .padding(12.dp),
+            shape = RoundedCornerShape(18.dp),
             backgroundColor = SurfaceDarkElevated,
-            borderColor = GlassBorder,
+            borderColor = NeonCyan,
             borderWidth = 1.5.dp
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp)
+                    .padding(18.dp)
             ) {
-                // Header Bar
+                // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -78,17 +86,17 @@ fun ExportDialog(
                 ) {
                     Column {
                         Text(
-                            text = "EXPORT TO MINECRAFT BEDROCK",
+                            text = "EXPORTAR .MCPACK PARA MINECRAFT BEDROCK",
                             color = NeonCyan,
-                            fontSize = 16.sp,
+                            fontSize = 15.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "NATIVE .MCPACK BEHAVIOR PACKAGE",
+                            text = "COMPATÍVEL COM BEDROCK 1.21+ (BEHAVIOR PACK AUTOMÁTICO)",
                             color = TextSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -96,31 +104,31 @@ fun ExportDialog(
                     GlassIconButton(
                         onClick = onDismiss,
                         icon = Icons.Default.Close,
-                        contentDescription = "Close",
-                        size = 36.dp
+                        contentDescription = "Fechar",
+                        size = 34.dp
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Scrollable Content
+                // Scrollable Body
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // Circuit Name Input Field
+                    // Nome do Circuito Input
                     Text(
-                        text = "PACKAGE NAME",
+                        text = "NOME DO CIRCUITO",
                         color = TextSecondary,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     OutlinedTextField(
-                        value = packName,
-                        onValueChange = { packName = it },
+                        value = circuitNameInput,
+                        onValueChange = { circuitNameInput = it },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
@@ -130,89 +138,123 @@ fun ExportDialog(
                             unfocusedTextColor = TextPrimary,
                             cursorColor = NeonCyan
                         ),
-                        shape = RoundedCornerShape(10.dp)
+                        shape = RoundedCornerShape(8.dp)
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    // Circuit Metadata Badges
+                    Text(
+                        text = "Identificador sanitizado: /function $sanitizedName",
+                        color = NeonCyanDim,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Badges de Status
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        CyberBadge(label = "BLOCKS", value = "$totalBlocks", accentColor = NeonCyan)
+                        CyberBadge(label = "BLOCOS", value = "$totalBlocks", accentColor = NeonCyan)
                         CyberBadge(
-                            label = "SIZE",
+                            label = "DIMENSÕES",
                             value = "${bounds.sizeX}x${bounds.sizeY}x${bounds.sizeZ}",
                             accentColor = ElectricBlue
                         )
-                        CyberBadge(label = "BEDROCK", value = "1.20+", accentColor = StatusSuccess)
+                        CyberBadge(label = "BEDROCK", value = "1.21+", accentColor = StatusSuccess)
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Bedrock Instructions Card
-                    Box(
+                    // Checkbox de Piso Base de Pedra Lisa
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(CyberBlack.copy(alpha = 0.6f))
-                            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(10.dp))
-                            .padding(12.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(SpaceDark.copy(alpha = 0.8f))
+                            .clickable { includeSmoothStoneBase = !includeSmoothStoneBase }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Checkbox(
+                            checked = includeSmoothStoneBase,
+                            onCheckedChange = { includeSmoothStoneBase = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = NeonCyan,
+                                uncheckedColor = TextSecondary,
+                                checkmarkColor = CyberBlack
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
-                                text = "BEDROCK IMPORT & DEPLOYMENT",
+                                text = "Incluir piso base de pedra lisa (smooth_stone)",
                                 color = TextPrimary,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "1. Tap 'SHARE / OPEN IN MINECRAFT' to launch Bedrock directly.\n" +
-                                        "2. Enable this behavior pack in your Bedrock world settings.\n" +
-                                        "3. Type '/function spawn' in chat to construct the circuit automatically at your coordinates.",
+                                text = "Gera uma base sólida por baixo na camada Y: -1 antes de posicionar os circuitos",
                                 color = TextSecondary,
-                                fontSize = 11.sp,
-                                lineHeight = 16.sp
+                                fontSize = 10.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Script Preview Box
-                    Text(
-                        text = "FUNCTIONS/SPAWN.MCFUNCTION PREVIEW",
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Box(
+                    // Botão para alternar visualização do código .mcfunction
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(130.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF04060A))
-                            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
-                            .padding(10.dp)
+                            .clickable { showCommandsPreview = !showCommandsPreview }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = mcfunctionScript,
-                            color = NeonCyanDim,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 14.sp
+                        Icon(
+                            imageVector = if (showCommandsPreview) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = "Visualizar Comandos",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(16.dp)
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (showCommandsPreview) "Ocultar comandos gerados" else "Visualizar comandos gerados (.mcfunction)",
+                            color = NeonCyan,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (showCommandsPreview) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF04060A))
+                                .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = mcfunctionScript,
+                                color = NeonCyanDim,
+                                fontSize = 9.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 13.sp
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Bottom Action Buttons
+                // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -220,12 +262,12 @@ fun ExportDialog(
                     GlassButton(
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("Bedrock Spawn Script", mcfunctionScript)
+                            val clip = ClipData.newPlainText("Bedrock Commands", mcfunctionScript)
                             clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, "Commands copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Comandos copiados com sucesso!", Toast.LENGTH_SHORT).show()
                         },
                         icon = Icons.Default.ContentCopy,
-                        text = "COPY COMMANDS",
+                        text = "COPIAR COMANDOS",
                         modifier = Modifier.weight(1f),
                         accentColor = ElectricBlue
                     )
@@ -233,19 +275,185 @@ fun ExportDialog(
                     GlassButton(
                         onClick = {
                             try {
-                                val packFile = BedrockPackExporter.exportToCacheFile(context, grid, packName)
-                                val shareIntent = BedrockPackExporter.createShareIntent(context, packFile)
-                                context.startActivity(Intent.createChooser(shareIntent, "Open with Minecraft or Share"))
+                                val packFile = McpackExporter.saveMcpackFile(
+                                    context,
+                                    grid,
+                                    circuitNameInput,
+                                    includeSmoothStoneBase
+                                )
+                                onExportComplete(packFile, sanitizedName)
                             } catch (e: Exception) {
-                                Toast.makeText(context, "Export error: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Erro na exportação: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         },
-                        icon = Icons.Default.Share,
-                        text = "SHARE / OPEN IN MINECRAFT",
-                        modifier = Modifier.weight(1.4f),
+                        icon = Icons.Default.FileDownload,
+                        text = "EXPORTAR .MCPACK",
+                        modifier = Modifier.weight(1.3f),
                         isActive = true,
                         accentColor = NeonCyan
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ExportSuccessDialog(
+    packFile: File,
+    sanitizedName: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val spawnCommand = "/function $sanitizedName"
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        GlassBox(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .wrapContentHeight()
+                .padding(16.dp),
+            shape = RoundedCornerShape(18.dp),
+            backgroundColor = SurfaceDarkElevated,
+            borderColor = StatusSuccess,
+            borderWidth = 1.5.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                // Header com sucesso
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "PACOTE .MCPACK GERADO COM SUCESSO!",
+                            color = StatusSuccess,
+                            fontSize = 15.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Salvo em: Download/RedstoneLab/${packFile.name}",
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+
+                    GlassIconButton(
+                        onClick = onDismiss,
+                        icon = Icons.Default.Close,
+                        contentDescription = "Fechar",
+                        size = 34.dp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Botão de Instalação em 1 Toque: ABRIR NO MINECRAFT
+                GlassButton(
+                    onClick = {
+                        try {
+                            val intent = McpackExporter.createOpenInMinecraftIntent(context, packFile)
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(
+                                context,
+                                "Minecraft não pôde ser iniciado diretamente: ${e.message}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    icon = Icons.Default.PlayArrow,
+                    text = "ABRIR NO MINECRAFT",
+                    modifier = Modifier.fillMaxWidth(),
+                    isActive = true,
+                    accentColor = StatusSuccess,
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Caixa com comando pronto e botão de cópia
+                Text(
+                    text = "COMANDO DE SPAWN:",
+                    color = TextSecondary,
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CyberBlack)
+                        .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = spawnCommand,
+                        color = NeonCyan,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    GlassButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Spawn Command", spawnCommand)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Comando '$spawnCommand' copiado!", Toast.LENGTH_SHORT).show()
+                        },
+                        icon = Icons.Default.ContentCopy,
+                        text = "COPIAR",
+                        accentColor = ElectricBlue,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Mini guia de 3 passos curtos
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SpaceDark)
+                        .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "COMO SPAWNAR O CIRCUITO NO SEU MUNDO:",
+                            color = TextPrimary,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "1. Toque em 'ABRIR NO MINECRAFT' e ative o Pacote de Comportamento nas opções do mundo.\n" +
+                                    "2. Entre no mundo e abra o chat.\n" +
+                                    "3. Cole o comando $spawnCommand e aperte Enviar.",
+                            color = TextSecondary,
+                            fontSize = 10.5.sp,
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             }
         }

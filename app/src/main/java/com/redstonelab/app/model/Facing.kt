@@ -1,12 +1,17 @@
 package com.redstonelab.app.model
 
-enum class Facing(val dx: Int, val dy: Int, val dz: Int, val bedrockName: String) {
-    NORTH(0, -1, 0, "north"),
+enum class Facing(
+    val dx: Int,
+    val dy: Int,
+    val dz: Int,
+    val bedrockName: String
+) {
+    NORTH(0, 0, -1, "north"),
     EAST(1, 0, 0, "east"),
-    SOUTH(0, 1, 0, "south"),
+    SOUTH(0, 0, 1, "south"),
     WEST(-1, 0, 0, "west"),
-    UP(0, 0, 1, "up"),
-    DOWN(0, 0, -1, "down");
+    UP(0, 1, 0, "up"),
+    DOWN(0, -1, 0, "down");
 
     val opposite: Facing
         get() = when (this) {

@@ -2,4 +2,6 @@
 <paths>
     <cache-path name="circuit_cache" path="." />
     <files-path name="circuit_files" path="." />
+    <external-path name="external_download" path="Download" />
+    <external-files-path name="external_files" path="." />
 </paths>

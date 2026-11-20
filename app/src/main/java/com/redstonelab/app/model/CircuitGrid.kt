@@ -1,8 +1,11 @@
 package com.redstonelab.app.model
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 data class CircuitBounds(
     val minX: Int, val maxX: Int,
-    val minY: Int, val maxY: Int,
+    val minY: Int, val maxY: Int, // Y is height (layers)
     val minZ: Int, val maxZ: Int
 ) {
     val sizeX: Int get() = if (maxX >= minX) maxX - minX + 1 else 0
@@ -12,7 +15,10 @@ data class CircuitBounds(
 }
 
 class CircuitGrid(
-    initialBlocks: Map<BlockCoord, BlockState> = emptyMap()
+    initialBlocks: Map<BlockCoord, BlockState> = emptyMap(),
+    val widthX: Int = 16,
+    val depthZ: Int = 16,
+    val maxHeightY: Int = 8
 ) {
     private val blocks = HashMap<BlockCoord, BlockState>(initialBlocks)
 
@@ -36,8 +42,8 @@ class CircuitGrid(
 
     fun getAll(): Map<BlockCoord, BlockState> = HashMap(blocks)
 
-    fun getLayer(z: Int): List<BlockState> {
-        return blocks.values.filter { it.z == z }
+    fun getLayer(y: Int): List<BlockState> {
+        return blocks.values.filter { it.y == y }
     }
 
     val blockCount: Int get() = blocks.size
@@ -68,6 +74,99 @@ class CircuitGrid(
     }
 
     fun clone(): CircuitGrid {
-        return CircuitGrid(blocks)
+        return CircuitGrid(blocks, widthX, depthZ, maxHeightY)
+    }
+
+    /**
+     * Serializes this circuit grid to a JSON string for offline local storage.
+     */
+    fun toJson(): String {
+        val root = JSONObject()
+        root.put("widthX", widthX)
+        root.put("depthZ", depthZ)
+        root.put("maxHeightY", maxHeightY)
+
+        val arr = JSONArray()
+        for ((coord, state) in blocks) {
+            val obj = JSONObject()
+            obj.put("x", coord.x)
+            obj.put("y", coord.y)
+            obj.put("z", coord.z)
+            obj.put("type", state.type.name)
+            obj.put("power", state.power)
+            obj.put("facing", state.facing.name)
+            obj.put("delay", state.delay)
+            obj.put("isLocked", state.isLocked)
+            obj.put("isSubtractMode", state.isSubtractMode)
+            obj.put("isExtended", state.isExtended)
+            obj.put("isActive", state.isActive)
+            obj.put("attachmentFacing", state.attachmentFacing.name)
+            if (state.woolColor != null) {
+                obj.put("woolColor", state.woolColor)
+            }
+            arr.put(obj)
+        }
+        root.put("blocks", arr)
+        return root.toString(2)
+    }
+
+    companion object {
+        fun fromJson(jsonStr: String): CircuitGrid {
+            val root = JSONObject(jsonStr)
+            val w = root.optInt("widthX", 16)
+            val d = root.optInt("depthZ", 16)
+            val h = root.optInt("maxHeightY", 8)
+            val grid = CircuitGrid(widthX = w, depthZ = d, maxHeightY = h)
+
+            val arr = root.optJSONArray("blocks") ?: JSONArray()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val x = obj.getInt("x")
+                val y = obj.getInt("y")
+                val z = obj.getInt("z")
+                val typeName = obj.getString("type")
+                val type = try {
+                    BlockType.valueOf(typeName)
+                } catch (_: Exception) {
+                    BlockType.SMOOTH_STONE
+                }
+                val power = obj.optInt("power", 0)
+                val facingName = obj.optString("facing", "NORTH")
+                val facing = try {
+                    Facing.valueOf(facingName)
+                } catch (_: Exception) {
+                    Facing.NORTH
+                }
+                val delay = obj.optInt("delay", 1)
+                val isLocked = obj.optBoolean("isLocked", false)
+                val isSubtractMode = obj.optBoolean("isSubtractMode", false)
+                val isExtended = obj.optBoolean("isExtended", false)
+                val isActive = obj.optBoolean("isActive", false)
+                val attachName = obj.optString("attachmentFacing", "DOWN")
+                val attachmentFacing = try {
+                    Facing.valueOf(attachName)
+                } catch (_: Exception) {
+                    Facing.DOWN
+                }
+                val woolColor = if (obj.has("woolColor")) obj.getString("woolColor") else null
+
+                grid.set(
+                    BlockState(
+                        coord = BlockCoord(x, y, z),
+                        type = type,
+                        power = power,
+                        facing = facing,
+                        delay = delay,
+                        isLocked = isLocked,
+                        isSubtractMode = isSubtractMode,
+                        isExtended = isExtended,
+                        isActive = isActive,
+                        attachmentFacing = attachmentFacing,
+                        woolColor = woolColor
+                    )
+                )
+            }
+            return grid
+        }
     }
 }

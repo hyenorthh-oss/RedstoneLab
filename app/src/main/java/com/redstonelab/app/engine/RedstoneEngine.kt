@@ -9,14 +9,23 @@ import java.util.ArrayDeque
 import kotlin.math.max
 
 /**
- * Accurate Minecraft Redstone Simulation Engine.
- * Handles discrete redstone tick progression, signal degradation (0..15),
- * hard vs soft powering, repeater delays & locking, comparator arithmetic,
- * torch inversion queues, button pulse lifecycles, and piston push/pull mechanics.
+ * Motor de Simulação de Redstone em Tempo Real (Minecraft Bedrock / Java Logic).
+ *
+ * Suporta:
+ * - Ciclo de ticks discretos (10 ticks/s padrão).
+ * - Força de sinal 0 a 15 com decaimento de 1 por bloco de pó.
+ * - Energia forte (strong power) vs energia fraca (weak power).
+ * - Lajes superiores (diodo vertical) e Vidro transparente.
+ * - Inversão de tochas com fila de atraso de 1 tick.
+ * - Repetidores com atraso de 1 a 4 ticks e travamento lateral.
+ * - Comparadores nos modos Comparar e Subtrair.
+ * - Observadores com pulso de 1 tick na saída traseira.
+ * - Lâmpada de Cobre (Copper Bulb) com comportamento T-Flip-Flop nativo na borda de subida.
+ * - Pistões e pistões grudentos com empurrão/puxão de blocos até 12 blocos, respeitando Obsidiana como imóvel.
+ * - Lâmpadas, Portas de Ferro, Alçapões, Note Block, TNT e Sino com feedback de ativação.
  */
-class RedstoneSimulator(val grid: CircuitGrid) {
+class RedstoneEngine(val grid: CircuitGrid) {
 
-    // Delay queues for scheduled tick events
     private data class ScheduledRepeaterEvent(
         val coord: BlockCoord,
         val targetPower: Int,
@@ -29,17 +38,14 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         var ticksRemaining: Int
     )
 
-    private data class ScheduledObserverEvent(
-        val coord: BlockCoord,
-        var ticksRemaining: Int
-    )
-
     private val repeaterQueue = mutableListOf<ScheduledRepeaterEvent>()
     private val torchQueue = mutableListOf<ScheduledTorchEvent>()
-    private val observerQueue = mutableListOf<ScheduledObserverEvent>()
 
-    // Track block changes to trigger observers
-    private val previousBlockTypes = HashMap<BlockCoord, BlockType>()
+    // Track state changes in front of observers
+    private val previousObserverWatchedTypes = HashMap<BlockCoord, BlockType>()
+
+    // Track previous power states for rising edge detection (e.g. Copper Bulb T-Flip-Flop)
+    private val previousBlockPowers = HashMap<BlockCoord, Int>()
 
     var tickCount: Long = 0L
         private set
@@ -48,21 +54,26 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         tickCount = 0L
         repeaterQueue.clear()
         torchQueue.clear()
-        observerQueue.clear()
-        previousBlockTypes.clear()
+        previousObserverWatchedTypes.clear()
+        previousBlockPowers.clear()
 
-        // Reset dynamic states
         val all = grid.getAll()
-        for ((coord, state) in all) {
+        for ((_, state) in all) {
             val resetState = when (state.type) {
-                BlockType.LEVER -> state // keep lever manual state
+                BlockType.LEVER -> state // keep lever user state
+                BlockType.DAYLIGHT_DETECTOR -> state
                 BlockType.REDSTONE_BLOCK -> state.withPower(15)
                 BlockType.REDSTONE_TORCH -> state.copy(isActive = true, power = 15)
                 BlockType.REDSTONE_REPEATER -> state.copy(power = 0, isLocked = false)
                 BlockType.REDSTONE_COMPARATOR -> state.copy(power = 0)
+                BlockType.COPPER_BULB -> state.copy(power = 0) // keep isActive T-Flip-Flop
                 BlockType.REDSTONE_LAMP -> state.copy(power = 0, isActive = false)
+                BlockType.IRON_DOOR, BlockType.IRON_TRAPDOOR -> state.copy(isActive = false)
+                BlockType.TNT -> state.copy(isActive = false)
                 BlockType.PISTON, BlockType.STICKY_PISTON -> state.copy(isExtended = false, power = 0)
                 BlockType.STONE_BUTTON -> state.copy(isActive = false, power = 0, pulseTicksLeft = 0)
+                BlockType.STONE_PRESSURE_PLATE -> state.copy(isActive = false, power = 0)
+                BlockType.SCULK_SENSOR -> state.copy(isActive = false, power = 0, pulseTicksLeft = 0)
                 BlockType.OBSERVER -> state.copy(power = 0, pulseTicksLeft = 0)
                 BlockType.REDSTONE_WIRE -> state.withPower(0)
                 else -> state.withPower(0)
@@ -73,53 +84,59 @@ class RedstoneSimulator(val grid: CircuitGrid) {
     }
 
     /**
-     * Executes exactly one Redstone Tick (100ms in Minecraft time).
+     * Executa exatamente 1 Tick de Redstone (100ms).
      */
     fun stepTick() {
         tickCount++
 
-        // 1. Process Button and Observer pulse decrements
-        processPulses()
+        // 1. Processa botões, sensores de sculk e pulsos de observadores
+        processPulseCountdowns()
 
-        // 2. Process Scheduled Repeater Delays
+        // 2. Processa atrasos agendados de repetidores
         processRepeaterQueue()
 
-        // 3. Process Scheduled Torch Events
+        // 3. Processa eventos agendados de tochas (inversão com 1 tick de atraso)
         processTorchQueue()
 
-        // 4. Update Repeaters inputs & locking
+        // 4. Atualiza entradas e travamento lateral de repetidores
         updateRepeaters()
 
-        // 5. Update Torches attached block checks
+        // 5. Atualiza agendamentos de tochas
         updateTorchSchedules()
 
-        // 6. Update Comparators
+        // 6. Atualiza comparadores (Comparar vs Subtrair)
         updateComparators()
 
-        // 7. Full Signal Propagation for Redstone Dust & Solid Conductor Blocks
+        // 7. Propagação de sinal de pó de redstone na grade 3D
         recalculateWireSignals()
 
-        // 8. Update Actuators (Lamps, Pistons)
+        // 8. Atualiza atuadores (Lâmpadas, Lâmpada de Cobre, Pistões, Portas, TNT)
         updateActuators()
 
-        // 9. Observer detection
+        // 9. Observadores: detecta mudanças na face frontal
         detectObserverTriggers()
     }
 
-    private fun processPulses() {
+    private fun processPulseCountdowns() {
         val all = grid.getAll()
-        for ((coord, state) in all) {
-            if (state.type == BlockType.STONE_BUTTON && state.pulseTicksLeft > 0) {
+        for ((_, state) in all) {
+            if (state.pulseTicksLeft > 0) {
                 val nextTicks = state.pulseTicksLeft - 1
                 if (nextTicks == 0) {
-                    grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
-                } else {
-                    grid.set(state.copy(pulseTicksLeft = nextTicks))
-                }
-            } else if (state.type == BlockType.OBSERVER && state.pulseTicksLeft > 0) {
-                val nextTicks = state.pulseTicksLeft - 1
-                if (nextTicks == 0) {
-                    grid.set(state.copy(power = 0, pulseTicksLeft = 0))
+                    when (state.type) {
+                        BlockType.STONE_BUTTON -> {
+                            grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
+                        }
+                        BlockType.SCULK_SENSOR -> {
+                            grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
+                        }
+                        BlockType.OBSERVER -> {
+                            grid.set(state.copy(power = 0, pulseTicksLeft = 0))
+                        }
+                        else -> {
+                            grid.set(state.copy(pulseTicksLeft = 0))
+                        }
+                    }
                 } else {
                     grid.set(state.copy(pulseTicksLeft = nextTicks))
                 }
@@ -128,24 +145,24 @@ class RedstoneSimulator(val grid: CircuitGrid) {
     }
 
     private fun processRepeaterQueue() {
-        val iterator = repeaterQueue.iterator()
-        while (iterator.hasNext()) {
-            val event = iterator.next()
+        val iter = repeaterQueue.iterator()
+        while (iter.hasNext()) {
+            val event = iter.next()
             event.ticksRemaining--
             if (event.ticksRemaining <= 0) {
                 val current = grid.get(event.coord)
                 if (current != null && current.type == BlockType.REDSTONE_REPEATER && !current.isLocked) {
                     grid.set(current.withPower(event.targetPower))
                 }
-                iterator.remove()
+                iter.remove()
             }
         }
     }
 
     private fun processTorchQueue() {
-        val iterator = torchQueue.iterator()
-        while (iterator.hasNext()) {
-            val event = iterator.next()
+        val iter = torchQueue.iterator()
+        while (iter.hasNext()) {
+            val event = iter.next()
             event.ticksRemaining--
             if (event.ticksRemaining <= 0) {
                 val current = grid.get(event.coord)
@@ -153,7 +170,7 @@ class RedstoneSimulator(val grid: CircuitGrid) {
                     val newPower = if (event.targetActive) 15 else 0
                     grid.set(current.copy(isActive = event.targetActive, power = newPower))
                 }
-                iterator.remove()
+                iter.remove()
             }
         }
     }
@@ -163,7 +180,7 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.REDSTONE_REPEATER) continue
 
-            // Check repeater side locking
+            // Verifica travamento lateral por outro repetidor ou comparador
             val leftSide = coord.offset(state.facing.counterClockwise())
             val rightSide = coord.offset(state.facing.clockwise())
             val isLocked = isRepeaterSidePowered(leftSide, state.facing.clockwise()) ||
@@ -174,13 +191,12 @@ class RedstoneSimulator(val grid: CircuitGrid) {
             }
             if (isLocked) continue
 
-            // Rear input signal
+            // Sinal na entrada traseira
             val rearCoord = coord.offset(state.facing.opposite)
             val rearPower = getOutputPowerTowards(rearCoord, state.facing)
             val desiredOutput = if (rearPower > 0) 15 else 0
 
             if (state.power != desiredOutput) {
-                // Check if already scheduled
                 val alreadyScheduled = repeaterQueue.any { it.coord == coord && it.targetPower == desiredOutput }
                 if (!alreadyScheduled) {
                     repeaterQueue.add(ScheduledRepeaterEvent(coord, desiredOutput, state.delay))
@@ -203,19 +219,15 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.REDSTONE_TORCH) continue
 
-            // The block the torch is mounted on
             val baseCoord = when (state.attachmentFacing) {
-                Facing.DOWN -> coord.offset(0, 0, -1)
-                else -> coord.offset(state.attachmentFacing)
+                Facing.DOWN -> coord.offset(Facing.DOWN) // torch on floor
+                else -> coord.offset(state.attachmentFacing) // torch on wall
             }
 
-            val baseBlock = grid.get(baseCoord)
-            val isBasePowered = if (baseBlock != null) {
-                isBlockSoftOrHardPowered(baseCoord)
-            } else false
-
-            // Torch inverts base block state: base powered -> torch turns OFF (isActive = false)
+            val isBasePowered = isBlockSoftOrHardPowered(baseCoord)
+            // A tocha inverte a base: base energizada -> tocha desliga (1 tick de atraso)
             val targetActive = !isBasePowered
+
             if (state.isActive != targetActive) {
                 val alreadyScheduled = torchQueue.any { it.coord == coord && it.targetActive == targetActive }
                 if (!alreadyScheduled) {
@@ -230,11 +242,11 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.REDSTONE_COMPARATOR) continue
 
-            // Rear input
+            // Entrada traseira
             val rearCoord = coord.offset(state.facing.opposite)
             val rearPower = getOutputPowerTowards(rearCoord, state.facing)
 
-            // Side inputs: max of left and right
+            // Entradas laterais: pega o valor máximo entre esquerda e direita
             val leftCoord = coord.offset(state.facing.counterClockwise())
             val rightCoord = coord.offset(state.facing.clockwise())
             val leftPower = getSideSignal(leftCoord, state.facing.clockwise())
@@ -264,11 +276,7 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         }
     }
 
-    /**
-     * Checks if a solid block is either hard-powered or soft-powered.
-     */
     fun isBlockSoftOrHardPowered(coord: BlockCoord): Boolean {
-        // Hard-powered by repeater, comparator, torch, or direct redstone block
         for (facing in Facing.ALL) {
             val neighborCoord = coord.offset(facing)
             val neighbor = grid.get(neighborCoord) ?: continue
@@ -277,14 +285,16 @@ class RedstoneSimulator(val grid: CircuitGrid) {
                 BlockType.REDSTONE_BLOCK -> return true
                 BlockType.LEVER -> if (neighbor.isActive) return true
                 BlockType.STONE_BUTTON -> if (neighbor.pulseTicksLeft > 0) return true
+                BlockType.STONE_PRESSURE_PLATE -> if (neighbor.isActive) return true
+                BlockType.DAYLIGHT_DETECTOR -> if (neighbor.isActive) return true
+                BlockType.SCULK_SENSOR -> if (neighbor.isActive) return true
                 BlockType.REDSTONE_REPEATER -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
                 BlockType.REDSTONE_COMPARATOR -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
                 BlockType.REDSTONE_TORCH -> {
-                    // Torch underneath powers the block above it
+                    // Tocha embaixo energiza fortemente o bloco acima
                     if (facing == Facing.DOWN && neighbor.isActive) return true
                 }
                 BlockType.REDSTONE_WIRE -> {
-                    // Dust pointing into or on top of this block powers it softly
                     if (neighbor.power > 0) return true
                 }
                 else -> {}
@@ -293,26 +303,39 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         return false
     }
 
+    fun isBlockHardPowered(coord: BlockCoord): Boolean {
+        for (facing in Facing.ALL) {
+            val neighborCoord = coord.offset(facing)
+            val neighbor = grid.get(neighborCoord) ?: continue
+            when (neighbor.type) {
+                BlockType.REDSTONE_BLOCK -> return true
+                BlockType.REDSTONE_REPEATER -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
+                BlockType.REDSTONE_COMPARATOR -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
+                BlockType.REDSTONE_TORCH -> if (facing == Facing.DOWN && neighbor.isActive) return true
+                else -> {}
+            }
+        }
+        return false
+    }
+
     /**
-     * Propagates Redstone Wire signals using priority breadth-first propagation.
+     * Propagação precisa do Pó de Redstone com atenuação de 1 por bloco.
      */
     fun recalculateWireSignals() {
-        // Collect all wire coordinates and reset their power to 0
         val wires = HashMap<BlockCoord, BlockState>()
         val sourcesQueue = ArrayDeque<Pair<BlockCoord, Int>>()
-
         val all = grid.getAll()
+
         for ((coord, state) in all) {
             if (state.type == BlockType.REDSTONE_WIRE) {
                 wires[coord] = state.withPower(0)
             }
         }
 
-        // 1. Identify primary power injections into the wire network
+        // 1. Identifica injeções diretas de energia na rede de fios
         for ((coord, wire) in wires) {
             var directPower = 0
 
-            // Check 6 adjacent neighbors for direct power emission
             for (facing in Facing.ALL) {
                 val neighborCoord = coord.offset(facing)
                 val neighbor = all[neighborCoord] ?: continue
@@ -321,6 +344,9 @@ class RedstoneSimulator(val grid: CircuitGrid) {
                     BlockType.REDSTONE_BLOCK -> 15
                     BlockType.LEVER -> if (neighbor.isActive) 15 else 0
                     BlockType.STONE_BUTTON -> if (neighbor.pulseTicksLeft > 0) 15 else 0
+                    BlockType.STONE_PRESSURE_PLATE -> if (neighbor.isActive) 15 else 0
+                    BlockType.DAYLIGHT_DETECTOR -> if (neighbor.isActive) 15 else 0
+                    BlockType.SCULK_SENSOR -> if (neighbor.isActive) 15 else 0
                     BlockType.REDSTONE_TORCH -> if (neighbor.isActive) 15 else 0
                     BlockType.OBSERVER -> if (neighbor.facing.opposite == facing && neighbor.pulseTicksLeft > 0) 15 else 0
                     BlockType.REDSTONE_REPEATER -> {
@@ -329,11 +355,9 @@ class RedstoneSimulator(val grid: CircuitGrid) {
                     BlockType.REDSTONE_COMPARATOR -> {
                         if (neighbor.facing == facing.opposite) neighbor.power else 0
                     }
-                    BlockType.STONE, BlockType.TARGET_BLOCK -> {
-                        // If this solid conductor is powered, it can power adjacent wire
-                        if (isBlockHardPowered(neighborCoord)) 15 else 0
+                    else -> {
+                        if (neighbor.type.isSolidConductor && isBlockHardPowered(neighborCoord)) 15 else 0
                     }
-                    else -> 0
                 }
                 if (power > directPower) directPower = power
             }
@@ -344,37 +368,36 @@ class RedstoneSimulator(val grid: CircuitGrid) {
             }
         }
 
-        // 2. Propagate signals through wire mesh with distance decay (-1 per step)
+        // 2. Propaga sinais pela malha de fios com decaimento (-1 por bloco)
         while (sourcesQueue.isNotEmpty()) {
             val (currentCoord, currentPower) = sourcesQueue.poll()
-            if (currentPower <= 1) continue // Cannot propagate further if power <= 1
+            if (currentPower <= 1) continue
 
             val nextPower = currentPower - 1
 
-            // Horizontal Cardinal Neighbors
             for (cardinal in Facing.CARDINALS) {
                 val neighborCoord = currentCoord.offset(cardinal)
 
-                // Level 0: Same height
+                // Nível 0: Mesmo plano Y
                 checkAndPropagateWire(neighborCoord, nextPower, wires, sourcesQueue)
 
-                // Level +1: Step UP 1 block (if block above current is non-solid)
-                val aboveCurrent = all[currentCoord.offset(0, 0, 1)]
+                // Nível +1: Subir 1 bloco (se o bloco acima do atual não for condutor sólido opaco)
+                val aboveCurrent = all[currentCoord.offset(Facing.UP)]
                 if (aboveCurrent == null || !aboveCurrent.type.isSolidConductor) {
-                    val stepUpCoord = neighborCoord.offset(0, 0, 1)
+                    val stepUpCoord = neighborCoord.offset(Facing.UP)
                     checkAndPropagateWire(stepUpCoord, nextPower, wires, sourcesQueue)
                 }
 
-                // Level -1: Step DOWN 1 block (if block above destination is non-solid)
+                // Nível -1: Descer 1 bloco (se o bloco acima do destino não for condutor sólido opaco)
                 val aboveDest = all[neighborCoord]
                 if (aboveDest == null || !aboveDest.type.isSolidConductor) {
-                    val stepDownCoord = neighborCoord.offset(0, 0, -1)
+                    val stepDownCoord = neighborCoord.offset(Facing.DOWN)
                     checkAndPropagateWire(stepDownCoord, nextPower, wires, sourcesQueue)
                 }
             }
         }
 
-        // 3. Write back calculated wire states to grid
+        // 3. Grava de volta na grade
         for ((coord, wire) in wires) {
             grid.set(wire)
         }
@@ -394,57 +417,69 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         }
     }
 
-    private fun isBlockHardPowered(coord: BlockCoord): Boolean {
-        for (facing in Facing.ALL) {
-            val neighborCoord = coord.offset(facing)
-            val neighbor = grid.get(neighborCoord) ?: continue
-            when (neighbor.type) {
-                BlockType.REDSTONE_BLOCK -> return true
-                BlockType.REDSTONE_REPEATER -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
-                BlockType.REDSTONE_COMPARATOR -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
-                BlockType.REDSTONE_TORCH -> if (facing == Facing.DOWN && neighbor.isActive) return true
-                else -> {}
-            }
-        }
-        return false
-    }
-
     private fun getOutputPowerTowards(coord: BlockCoord, towards: Facing): Int {
         val block = grid.get(coord) ?: return 0
         return when (block.type) {
             BlockType.REDSTONE_BLOCK -> 15
             BlockType.LEVER -> if (block.isActive) 15 else 0
             BlockType.STONE_BUTTON -> if (block.pulseTicksLeft > 0) 15 else 0
+            BlockType.STONE_PRESSURE_PLATE -> if (block.isActive) 15 else 0
+            BlockType.DAYLIGHT_DETECTOR -> if (block.isActive) 15 else 0
+            BlockType.SCULK_SENSOR -> if (block.isActive) 15 else 0
             BlockType.REDSTONE_TORCH -> if (block.isActive) 15 else 0
             BlockType.REDSTONE_REPEATER -> if (block.facing == towards) block.power else 0
             BlockType.REDSTONE_COMPARATOR -> if (block.facing == towards) block.power else 0
             BlockType.REDSTONE_WIRE -> block.power
             BlockType.OBSERVER -> if (block.facing.opposite == towards && block.pulseTicksLeft > 0) 15 else 0
-            BlockType.STONE -> if (isBlockHardPowered(coord)) 15 else 0
-            else -> 0
+            else -> if (block.type.isSolidConductor && isBlockHardPowered(coord)) 15 else 0
         }
     }
 
     private fun updateActuators() {
         val all = grid.getAll()
         for ((coord, state) in all) {
+            val isPowered = isBlockSoftOrHardPowered(coord)
+            val prevPower = previousBlockPowers[coord] ?: 0
+
             when (state.type) {
                 BlockType.REDSTONE_LAMP -> {
-                    val isPowered = isBlockSoftOrHardPowered(coord)
                     if (state.isActive != isPowered) {
                         grid.set(state.copy(isActive = isPowered, power = if (isPowered) 15 else 0))
                     }
                 }
+
+                BlockType.COPPER_BULB -> {
+                    // Comportamento T-Flip-Flop: alterna estado na borda de subida (rising edge: 0 -> >0)
+                    if (isPowered && prevPower == 0) {
+                        val newActive = !state.isActive
+                        grid.set(state.copy(isActive = newActive, power = if (newActive) 15 else 0))
+                    }
+                }
+
+                BlockType.IRON_DOOR, BlockType.IRON_TRAPDOOR -> {
+                    if (state.isActive != isPowered) {
+                        grid.set(state.copy(isActive = isPowered))
+                    }
+                }
+
+                BlockType.TNT, BlockType.NOTE_BLOCK, BlockType.BELL -> {
+                    if (state.isActive != isPowered) {
+                        grid.set(state.copy(isActive = isPowered))
+                    }
+                }
+
                 BlockType.PISTON, BlockType.STICKY_PISTON -> {
-                    val isPowered = isBlockSoftOrHardPowered(coord)
                     if (isPowered && !state.isExtended) {
                         tryExtendPiston(coord, state)
                     } else if (!isPowered && state.isExtended) {
                         tryRetractPiston(coord, state)
                     }
                 }
+
                 else -> {}
             }
+
+            previousBlockPowers[coord] = if (isPowered) 15 else 0
         }
     }
 
@@ -453,21 +488,23 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         val pushList = mutableListOf<BlockCoord>()
         var probe = pistonCoord.offset(facing)
 
-        // Find blocks in line up to push limit (12 blocks in Minecraft)
+        // Limite de empurrão no Minecraft: até 12 blocos
         while (pushList.size < 12) {
             val block = grid.get(probe) ?: break
             if (block.type == BlockType.AIR) break
-            // Obsidian / Bedrock cannot be pushed
+            if (block.type.isImmovable) {
+                // Obsidiana encontrada: pistão não consegue empurrar!
+                return
+            }
             pushList.add(probe)
             probe = probe.offset(facing)
         }
 
         if (pushList.size >= 12 && grid.get(probe) != null && grid.get(probe)!!.type != BlockType.AIR) {
-            // Push limit exceeded; piston cannot extend
-            return
+            return // Limite de 12 blocos excedido
         }
 
-        // Shift blocks forward from farthest to closest
+        // Move blocos do mais distante para o mais próximo
         for (i in pushList.indices.reversed()) {
             val fromCoord = pushList[i]
             val toCoord = fromCoord.offset(facing)
@@ -485,10 +522,9 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         grid.set(pistonState.copy(isExtended = false, power = 0))
 
         if (pistonState.type == BlockType.STICKY_PISTON) {
-            // Pull the block located 2 units away back to 1 unit away
             val blockAheadCoord = pistonCoord.offset(pistonState.facing).offset(pistonState.facing)
             val blockToPull = grid.get(blockAheadCoord)
-            if (blockToPull != null && blockToPull.type != BlockType.AIR) {
+            if (blockToPull != null && blockToPull.type != BlockType.AIR && !blockToPull.type.isImmovable) {
                 val pulledCoord = pistonCoord.offset(pistonState.facing)
                 grid.remove(blockAheadCoord)
                 grid.set(blockToPull.copy(coord = pulledCoord))
@@ -501,16 +537,14 @@ class RedstoneSimulator(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.OBSERVER) continue
 
-            // Observer face observes the block in front
             val faceCoord = coord.offset(state.facing)
-            val currentFacingType = grid.get(faceCoord)?.type ?: BlockType.AIR
-            val previousFacingType = previousBlockTypes[faceCoord] ?: BlockType.AIR
+            val currentType = grid.get(faceCoord)?.type ?: BlockType.AIR
+            val previousType = previousObserverWatchedTypes[faceCoord] ?: BlockType.AIR
 
-            if (currentFacingType != previousFacingType && state.pulseTicksLeft == 0) {
-                // Trigger 1-tick observer pulse
+            if (currentType != previousType && state.pulseTicksLeft == 0) {
                 grid.set(state.copy(power = 15, pulseTicksLeft = 2))
             }
-            previousBlockTypes[faceCoord] = currentFacingType
+            previousObserverWatchedTypes[faceCoord] = currentType
         }
     }
 }

@@ -9,7 +9,7 @@ data class BlockCoord(val x: Int, val y: Int, val z: Int) {
         return BlockCoord(x + dx, y + dy, z + dz)
     }
 
-    override fun toString(): String = "($x, $y, $z)"
+    override fun toString(): String = "($x, Y:$y, $z)"
 }
 
 data class BlockState(
@@ -17,16 +17,17 @@ data class BlockState(
     val type: BlockType,
     val power: Int = 0,
     val facing: Facing = Facing.NORTH,
-    val delay: Int = 1,              // Repeaters: 1..4 ticks
-    val isLocked: Boolean = false,    // Repeaters: locked state
-    val isSubtractMode: Boolean = false, // Comparators: compare vs subtract
-    val isExtended: Boolean = false,  // Pistons: extended head
-    val isActive: Boolean = false,    // Levers: ON/OFF, Lamps: LIT/UNLIT, Torches: LIT/UNLIT
-    val pulseTicksLeft: Int = 0,     // Buttons: pulse countdown (10 ticks), Observer (1-tick pulse)
-    val attachmentFacing: Facing = Facing.DOWN // For torches/buttons/levers attached to floor (DOWN) or wall
+    val delay: Int = 1,                 // Repeaters: 1..4 ticks
+    val isLocked: Boolean = false,       // Repeaters: locked state
+    val isSubtractMode: Boolean = false,    // Comparators: compare vs subtract
+    val isExtended: Boolean = false,     // Pistons: extended head
+    val isActive: Boolean = false,       // Levers, Lamps, Copper Bulb, Torch, Daylight, Sculk
+    val pulseTicksLeft: Int = 0,        // Buttons (10 ticks), Observers (1 tick), Sculk (30 ticks)
+    val attachmentFacing: Facing = Facing.DOWN, // For torches/buttons/levers attached to floor (DOWN) or wall
+    val woolColor: String? = null       // Color for wool blocks: "red", "blue", "green", "yellow"
 ) {
     val x: Int get() = coord.x
-    val y: Int get() = coord.y
+    val y: Int get() = coord.y // Height / Layer
     val z: Int get() = coord.z
 
     val isPowered: Boolean get() = power > 0 || isActive
@@ -66,6 +67,33 @@ data class BlockState(
             isActive = true,
             power = 15,
             pulseTicksLeft = 10
+        )
+    }
+
+    fun togglePressurePlate(): BlockState {
+        if (type != BlockType.STONE_PRESSURE_PLATE) return this
+        val newActive = !isActive
+        return copy(
+            isActive = newActive,
+            power = if (newActive) 15 else 0
+        )
+    }
+
+    fun toggleDaylightDetector(): BlockState {
+        if (type != BlockType.DAYLIGHT_DETECTOR) return this
+        val newActive = !isActive
+        return copy(
+            isActive = newActive,
+            power = if (newActive) 15 else 0
+        )
+    }
+
+    fun triggerSculkSensor(): BlockState {
+        if (type != BlockType.SCULK_SENSOR) return this
+        return copy(
+            isActive = true,
+            power = 15,
+            pulseTicksLeft = 30
         )
     }
 }
