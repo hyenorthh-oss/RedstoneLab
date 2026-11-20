@@ -13,9 +13,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.redstonelab.app.audio.SoundEffect
 import com.redstonelab.app.audio.SoundManager
 import com.redstonelab.app.engine.RedstoneEngine
+import com.redstonelab.app.engine.RedstoneSoundEvent
 import com.redstonelab.app.engine.SimulationState
 import com.redstonelab.app.exporter.McpackExporter
 import com.redstonelab.app.model.BlockCoord
@@ -148,45 +148,38 @@ class EditorViewModel : ViewModel() {
     var localProjects by mutableStateOf<List<CircuitProjectMetadata>>(emptyList())
         private set
 
-    // Estados de Minimização dos Menus (visão 100% livre do tabuleiro)
-    var isTopBarMinimized by mutableStateOf(false)
+    // Estados de Minimização dos Menus (Modo Tela Limpa)
+    var isTopBarCollapsed by mutableStateOf(false)
         private set
 
-    var isBottomPaletteMinimized by mutableStateOf(false)
-        private set
-
-    var isSidePanelMinimized by mutableStateOf(false)
+    var isBottomBarCollapsed by mutableStateOf(false)
         private set
 
     fun toggleTopBar() {
-        isTopBarMinimized = !isTopBarMinimized
-        SoundManager.play(SoundEffect.UI_TAP)
+        isTopBarCollapsed = !isTopBarCollapsed
+        SoundManager.playUi()
     }
 
-    fun toggleBottomPalette() {
-        isBottomPaletteMinimized = !isBottomPaletteMinimized
-        SoundManager.play(SoundEffect.UI_TAP)
-    }
-
-    fun toggleSidePanel() {
-        isSidePanelMinimized = !isSidePanelMinimized
-        SoundManager.play(SoundEffect.UI_TAP)
-    }
-
-    fun restoreAllMenus() {
-        isTopBarMinimized = false
-        isBottomPaletteMinimized = false
-        isSidePanelMinimized = false
-        SoundManager.play(SoundEffect.UI_TAP)
+    fun toggleBottomBar() {
+        isBottomBarCollapsed = !isBottomBarCollapsed
+        SoundManager.playUi()
     }
 
     fun toggleSoundMute(): Boolean {
-        return SoundManager.toggleMute()
+        val result = SoundManager.toggleMute()
+        if (!result) {
+            SoundManager.playUi()
+        }
+        return result
     }
 
     private fun setupEngine() {
         engine.onSoundEvent = { event ->
-            SoundManager.play(event)
+            when (event) {
+                RedstoneSoundEvent.PISTON_EXTEND, RedstoneSoundEvent.PISTON_RETRACT -> SoundManager.playPiston()
+                RedstoneSoundEvent.COPPER_BULB_TOGGLE, RedstoneSoundEvent.DOOR_TOGGLE -> SoundManager.playClick()
+                RedstoneSoundEvent.NOTE_BLOCK, RedstoneSoundEvent.BELL, RedstoneSoundEvent.TNT_PRIME -> SoundManager.playClick()
+            }
         }
     }
 
@@ -214,7 +207,7 @@ class EditorViewModel : ViewModel() {
             setupEngine()
             engine.recalculateWireSignals()
             circuitGrid = circuitGrid.clone()
-            SoundManager.play(SoundEffect.UI_TAP)
+            SoundManager.playUi()
         }
     }
 
@@ -227,7 +220,7 @@ class EditorViewModel : ViewModel() {
             setupEngine()
             engine.recalculateWireSignals()
             circuitGrid = circuitGrid.clone()
-            SoundManager.play(SoundEffect.UI_TAP)
+            SoundManager.playUi()
         }
     }
 
@@ -355,37 +348,37 @@ class EditorViewModel : ViewModel() {
             when (block.type) {
                 BlockType.LEVER -> {
                     circuitGrid.set(block.toggleLever())
-                    SoundManager.play(SoundEffect.LEVER_CLICK)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.STONE_BUTTON -> {
                     circuitGrid.set(block.triggerButton())
-                    SoundManager.play(SoundEffect.BUTTON_CLICK)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.STONE_PRESSURE_PLATE -> {
                     circuitGrid.set(block.togglePressurePlate())
-                    SoundManager.play(SoundEffect.BUTTON_CLICK)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.DAYLIGHT_DETECTOR -> {
                     circuitGrid.set(block.toggleDaylightDetector())
-                    SoundManager.play(SoundEffect.UI_TAP)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.SCULK_SENSOR -> {
                     circuitGrid.set(block.triggerSculkSensor())
-                    SoundManager.play(SoundEffect.BELL)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.REDSTONE_REPEATER -> {
                     circuitGrid.set(block.cycleDelay())
-                    SoundManager.play(SoundEffect.UI_TAP)
+                    SoundManager.playClick()
                     handled = true
                 }
                 BlockType.REDSTONE_COMPARATOR -> {
                     circuitGrid.set(block.toggleSubtractMode())
-                    SoundManager.play(SoundEffect.UI_TAP)
+                    SoundManager.playClick()
                     handled = true
                 }
                 else -> {}
@@ -411,7 +404,7 @@ class EditorViewModel : ViewModel() {
                 )
                 circuitGrid.set(newState)
                 vibrate(context, 15)
-                SoundManager.play(SoundEffect.BLOCK_PLACE)
+                SoundManager.playPlace()
                 refreshGridAndSimulate()
             }
 
@@ -420,14 +413,14 @@ class EditorViewModel : ViewModel() {
                     saveHistorySnapshot()
                     circuitGrid.remove(coord)
                     vibrate(context, 20)
-                    SoundManager.play(SoundEffect.BLOCK_BREAK)
+                    SoundManager.playRemove()
                     refreshGridAndSimulate()
                 }
             }
 
             EditorTool.INSPECT -> {
                 // Mantém coord selecionada para o painel de inspeção
-                SoundManager.play(SoundEffect.UI_TAP)
+                SoundManager.playUi()
             }
         }
     }
@@ -451,7 +444,7 @@ class EditorViewModel : ViewModel() {
             circuitGrid.set(block.copy(facing = block.facing.clockwise()))
         }
         vibrate(context, 30)
-        SoundManager.play(SoundEffect.UI_TAP)
+        SoundManager.playClick()
         refreshGridAndSimulate()
     }
 

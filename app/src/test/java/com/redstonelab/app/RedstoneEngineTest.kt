@@ -1,6 +1,7 @@
 package com.redstonelab.app
 
 import com.redstonelab.app.engine.RedstoneEngine
+import com.redstonelab.app.engine.RedstoneSoundEvent
 import com.redstonelab.app.model.BlockCoord
 import com.redstonelab.app.model.BlockState
 import com.redstonelab.app.model.BlockType
@@ -142,5 +143,21 @@ class RedstoneEngineTest {
 
         assertEquals(15, grid.get(3, 1, 0)?.power)
         assertEquals(15, grid.get(4, 1, 0)?.power)
+    }
+
+    @Test
+    fun testSoundEventEmissionOnActuators() {
+        val grid = CircuitGrid()
+        // Lever -> Piston
+        grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.LEVER, isActive = true, power = 15))
+        grid.set(BlockState(BlockCoord(1, 1, 0), BlockType.PISTON, facing = Facing.EAST))
+
+        val engine = RedstoneEngine(grid)
+        val emittedEvents = mutableListOf<RedstoneSoundEvent>()
+        engine.onSoundEvent = { event -> emittedEvents.add(event) }
+
+        engine.stepTick()
+        assertTrue(emittedEvents.contains(RedstoneSoundEvent.PISTON_EXTEND))
+        assertTrue(grid.get(1, 1, 0)!!.isExtended)
     }
 }
