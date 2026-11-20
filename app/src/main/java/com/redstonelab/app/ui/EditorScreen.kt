@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.redstonelab.app.audio.SoundManager
 import com.redstonelab.app.components.CyberBadge
 import com.redstonelab.app.components.GlassBox
 import com.redstonelab.app.components.GlassButton
@@ -45,6 +46,11 @@ fun EditorScreen(
 ) {
     val context = LocalContext.current
     var selectedCategory by remember { mutableStateOf(BlockCategory.TRANSMISSION) }
+
+    // Garante inicialização nativa do SoundPool para baixa latência e 100% offline
+    LaunchedEffect(Unit) {
+        SoundManager.initialize(context)
+    }
 
     BoxWithConstraints(
         modifier = modifier
@@ -76,106 +82,174 @@ fun EditorScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Barra Superior com Padding de Safe Drawing (evita cortes pela barra de status/câmera)
+        // 2. Barra Superior com Scroll Horizontal e Botões de Minimizar / Restaurar
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.TopCenter
         ) {
-            GlassTopBar(viewModel = viewModel)
+            AnimatedVisibility(
+                visible = !viewModel.isTopBarMinimized,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                GlassTopBar(viewModel = viewModel)
+            }
+
+            if (viewModel.isTopBarMinimized) {
+                GlassButton(
+                    onClick = { viewModel.toggleTopBar() },
+                    icon = Icons.Default.KeyboardArrowDown,
+                    text = "MENU SUPERIOR",
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
         }
 
-        // 3. Lateral Direita: Seletor de Camada Y & Inspetor de Bloco
+        // 3. Lateral Direita: Seletor de Camada Y & Inspetor de Bloco com Minimizar / Restaurar
+        val sidePaddingTop = if (viewModel.isTopBarMinimized) 12.dp else 66.dp
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(top = 66.dp, end = 10.dp),
+                .padding(top = sidePaddingTop, end = 10.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Seletor de Camadas Y em formato de pílula
-            GlassBox(
-                shape = CircleShape,
-                backgroundColor = SurfaceBar,
-                borderColor = BorderSubtle
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    GlassIconButton(
-                        onClick = { viewModel.setLayer(viewModel.activeLayerY - 1) },
-                        icon = Icons.Default.Remove,
-                        contentDescription = "Camada Abaixo",
-                        size = 38.dp
-                    )
-
-                    CyberBadge(
-                        label = "CAMADA",
-                        value = "Y: ${viewModel.activeLayerY}",
-                        accentColor = RedstoneAccent
-                    )
-
-                    GlassIconButton(
-                        onClick = { viewModel.setLayer(viewModel.activeLayerY + 1) },
-                        icon = Icons.Default.Add,
-                        contentDescription = "Camada Acima",
-                        size = 38.dp
-                    )
-                }
-            }
-
-            // Inspetor Rápido do Bloco Selecionado
             AnimatedVisibility(
-                visible = viewModel.selectedBlockCoord != null,
+                visible = !viewModel.isSidePanelMinimized,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                val coord = viewModel.selectedBlockCoord
-                if (coord != null) {
-                    val block = viewModel.circuitGrid.get(coord)
-                    CircuitInspectorPanel(
-                        selectedCoord = coord,
-                        blockState = block,
-                        cameraOrientationLabel = viewModel.cameraOrientationLabel,
-                        isOnionSkinEnabled = viewModel.isOnionSkinEnabled,
-                        showSignalNumbers = viewModel.showSignalNumbers,
-                        onToggleOnionSkin = { viewModel.toggleOnionSkin() },
-                        onToggleSignalNumbers = { viewModel.toggleSignalNumbers() },
-                        onInteract = { viewModel.onTileClicked(coord, context) },
-                        onRotate = {
-                            if (block != null && block.type.isDirectional) {
-                                viewModel.circuitGrid.set(block.copy(facing = block.facing.clockwise()))
-                                viewModel.stepSingleTick()
-                            }
-                        },
-                        onDelete = {
-                            viewModel.circuitGrid.remove(coord)
-                            viewModel.stepSingleTick()
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Seletor de Camadas Y em formato de pílula com botão de colapso
+                    GlassBox(
+                        shape = CircleShape,
+                        backgroundColor = SurfaceBar,
+                        borderColor = BorderSubtle
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            GlassIconButton(
+                                onClick = { viewModel.setLayer(viewModel.activeLayerY - 1) },
+                                icon = Icons.Default.Remove,
+                                contentDescription = "Camada Abaixo",
+                                size = 38.dp
+                            )
+
+                            CyberBadge(
+                                label = "CAMADA",
+                                value = "Y: ${viewModel.activeLayerY}",
+                                accentColor = RedstoneAccent
+                            )
+
+                            GlassIconButton(
+                                onClick = { viewModel.setLayer(viewModel.activeLayerY + 1) },
+                                icon = Icons.Default.Add,
+                                contentDescription = "Camada Acima",
+                                size = 38.dp
+                            )
+
+                            GlassIconButton(
+                                onClick = { viewModel.toggleSidePanel() },
+                                icon = Icons.Default.ChevronRight,
+                                contentDescription = "Ocultar Painel Lateral",
+                                size = 38.dp,
+                                accentColor = ButtonDefault
+                            )
                         }
-                    )
+                    }
+
+                    // Inspetor Rápido do Bloco Selecionado
+                    AnimatedVisibility(
+                        visible = viewModel.selectedBlockCoord != null,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        val coord = viewModel.selectedBlockCoord
+                        if (coord != null) {
+                            val block = viewModel.circuitGrid.get(coord)
+                            CircuitInspectorPanel(
+                                selectedCoord = coord,
+                                blockState = block,
+                                cameraOrientationLabel = viewModel.cameraOrientationLabel,
+                                isOnionSkinEnabled = viewModel.isOnionSkinEnabled,
+                                showSignalNumbers = viewModel.showSignalNumbers,
+                                onToggleOnionSkin = { viewModel.toggleOnionSkin() },
+                                onToggleSignalNumbers = { viewModel.toggleSignalNumbers() },
+                                onInteract = { viewModel.onTileClicked(coord, context) },
+                                onRotate = {
+                                    if (block != null && block.type.isDirectional) {
+                                        viewModel.circuitGrid.set(block.copy(facing = block.facing.clockwise()))
+                                        viewModel.stepSingleTick()
+                                    }
+                                },
+                                onDelete = {
+                                    viewModel.circuitGrid.remove(coord)
+                                    viewModel.stepSingleTick()
+                                },
+                                onClose = {
+                                    viewModel.clearSelectedBlockCoord()
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+
+            if (viewModel.isSidePanelMinimized) {
+                GlassButton(
+                    onClick = { viewModel.toggleSidePanel() },
+                    icon = Icons.Default.Layers,
+                    text = "Y: ${viewModel.activeLayerY}",
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                )
             }
         }
 
-        // 4. Barra Inferior: Abas de Categoria + Paleta Deslizável com Ícones Voxel 3D
+        // 4. Barra Inferior: Abas de Categoria + Paleta com Minimizar / Restaurar
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            GlassBottomPalette(
-                selectedCategory = selectedCategory,
-                onCategorySelected = { selectedCategory = it },
-                selectedBlockType = viewModel.selectedBlockType,
-                onBlockTypeSelected = { viewModel.setBlockType(it) }
-            )
+            AnimatedVisibility(
+                visible = !viewModel.isBottomPaletteMinimized,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                GlassBottomPalette(
+                    selectedCategory = selectedCategory,
+                    onCategorySelected = { selectedCategory = it },
+                    selectedBlockType = viewModel.selectedBlockType,
+                    onBlockTypeSelected = { viewModel.setBlockType(it) },
+                    onMinimize = { viewModel.toggleBottomPalette() }
+                )
+            }
+
+            if (viewModel.isBottomPaletteMinimized) {
+                GlassButton(
+                    onClick = { viewModel.toggleBottomPalette() },
+                    icon = Icons.Default.KeyboardArrowUp,
+                    text = "PALETA DE BLOCOS",
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp)
+                )
+            }
         }
 
         // 5. Diálogos e Modais
@@ -233,14 +307,16 @@ private fun GlassTopBar(
         backgroundColor = SurfaceBar,
         borderColor = BorderSubtle
     ) {
+        // Row com scroll horizontal suave para NUNCA cortar botões (especialmente EXPORTAR .MCPACK)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Esquerda: Logo, Projetos e Exemplos
+            // Grupo 1: Logo, Projetos e Exemplos
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -293,7 +369,7 @@ private fun GlassTopBar(
                 )
             }
 
-            // Centro: Rotação Isométrica do Tabuleiro, Simulação e Ticks
+            // Grupo 2: Rotação Isométrica do Tabuleiro, Simulação e Ticks
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -345,7 +421,7 @@ private fun GlassTopBar(
                 )
             }
 
-            // Direita: Undo, Redo, Borracha, Girar Bloco e EXPORTAR .MCPACK
+            // Grupo 3: Undo, Redo, Borracha, Girar Bloco e EXPORTAR .MCPACK
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -394,6 +470,30 @@ private fun GlassTopBar(
                     contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                 )
             }
+
+            // Grupo 4: Som (Mutar/Desmutar) e Minimizar Menu Superior
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val isMuted = SoundManager.isMuted
+                GlassIconButton(
+                    onClick = { viewModel.toggleSoundMute() },
+                    icon = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                    contentDescription = if (isMuted) "Ativar Som" else "Mutar Som",
+                    isActive = isMuted,
+                    accentColor = if (isMuted) StatusError else ButtonDefault,
+                    size = 46.dp
+                )
+
+                GlassIconButton(
+                    onClick = { viewModel.toggleTopBar() },
+                    icon = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Minimizar Barra Superior",
+                    size = 46.dp,
+                    accentColor = ButtonDefault
+                )
+            }
         }
     }
 }
@@ -404,6 +504,7 @@ private fun GlassBottomPalette(
     onCategorySelected: (BlockCategory) -> Unit,
     selectedBlockType: BlockType,
     onBlockTypeSelected: (BlockType) -> Unit,
+    onMinimize: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     GlassBox(
@@ -413,39 +514,58 @@ private fun GlassBottomPalette(
         borderColor = BorderSubtle
     ) {
         Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            // Abas de Categoria em formato de pílula
+            // Abas de Categoria em formato de pílula + Botão de Minimizar
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                BlockCategory.entries.forEach { category ->
-                    val isSelected = category == selectedCategory
-                    Box(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(if (isSelected) ButtonActive else Color.Transparent)
-                            .border(
-                                width = if (isSelected) 1.5.dp else 1.dp,
-                                color = if (isSelected) BorderSelected else ButtonBorder,
-                                shape = CircleShape
+                Row(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BlockCategory.entries.forEach { category ->
+                        val isSelected = category == selectedCategory
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isSelected) ButtonActive else Color.Transparent)
+                                .border(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) BorderSelected else ButtonBorder,
+                                    shape = CircleShape
+                                )
+                                .clickable { onCategorySelected(category) }
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = category.label.uppercase(),
+                                color = if (isSelected) TextWhite else TextSecondary,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
-                            .clickable { onCategorySelected(category) }
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = category.label.uppercase(),
-                            color = if (isSelected) TextWhite else TextSecondary,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        )
+                        }
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                GlassIconButton(
+                    onClick = onMinimize,
+                    icon = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Minimizar Paleta de Blocos",
+                    size = 38.dp,
+                    accentColor = ButtonDefault
+                )
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Paleta deslizável com botões grandes de 52dp+, ícone voxel 3D e borda branca de 2dp
+            // Paleta deslizável com botões grandes de 54dp, ícone voxel 3D e borda branca de 2dp
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

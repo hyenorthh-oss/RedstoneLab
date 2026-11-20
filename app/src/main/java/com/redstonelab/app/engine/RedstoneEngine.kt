@@ -8,10 +8,22 @@ import com.redstonelab.app.model.Facing
 import java.util.ArrayDeque
 import kotlin.math.max
 
+enum class RedstoneSoundEvent {
+    PISTON_EXTEND,
+    PISTON_RETRACT,
+    NOTE_BLOCK,
+    BELL,
+    TNT_PRIME,
+    DOOR_TOGGLE,
+    COPPER_BULB_TOGGLE
+}
+
 /**
  * Motor de Simulação de Redstone em Tempo Real (Minecraft Bedrock / Java Logic).
  */
 class RedstoneEngine(val grid: CircuitGrid) {
+
+    var onSoundEvent: ((RedstoneSoundEvent) -> Unit)? = null
 
     private data class ScheduledRepeaterEvent(
         val coord: BlockCoord,
@@ -404,18 +416,39 @@ class RedstoneEngine(val grid: CircuitGrid) {
                     if (isPowered && prevPower == 0) {
                         val newActive = !state.isActive
                         grid.set(state.copy(isActive = newActive, power = if (newActive) 15 else 0))
+                        onSoundEvent?.invoke(RedstoneSoundEvent.COPPER_BULB_TOGGLE)
                     }
                 }
 
                 BlockType.IRON_DOOR, BlockType.IRON_TRAPDOOR -> {
                     if (state.isActive != isPowered) {
                         grid.set(state.copy(isActive = isPowered))
+                        onSoundEvent?.invoke(RedstoneSoundEvent.DOOR_TOGGLE)
                     }
                 }
 
-                BlockType.TNT, BlockType.NOTE_BLOCK, BlockType.BELL -> {
-                    if (state.isActive != isPowered) {
-                        grid.set(state.copy(isActive = isPowered))
+                BlockType.TNT -> {
+                    if (isPowered && !state.isActive) {
+                        grid.set(state.copy(isActive = true))
+                        onSoundEvent?.invoke(RedstoneSoundEvent.TNT_PRIME)
+                    }
+                }
+
+                BlockType.NOTE_BLOCK -> {
+                    if (isPowered && !state.isActive) {
+                        grid.set(state.copy(isActive = true))
+                        onSoundEvent?.invoke(RedstoneSoundEvent.NOTE_BLOCK)
+                    } else if (!isPowered && state.isActive) {
+                        grid.set(state.copy(isActive = false))
+                    }
+                }
+
+                BlockType.BELL -> {
+                    if (isPowered && !state.isActive) {
+                        grid.set(state.copy(isActive = true))
+                        onSoundEvent?.invoke(RedstoneSoundEvent.BELL)
+                    } else if (!isPowered && state.isActive) {
+                        grid.set(state.copy(isActive = false))
                     }
                 }
 
@@ -464,6 +497,7 @@ class RedstoneEngine(val grid: CircuitGrid) {
         }
 
         grid.set(pistonState.copy(isExtended = true, power = 15))
+        onSoundEvent?.invoke(RedstoneSoundEvent.PISTON_EXTEND)
     }
 
     private fun tryRetractPiston(pistonCoord: BlockCoord, pistonState: BlockState) {
@@ -478,6 +512,7 @@ class RedstoneEngine(val grid: CircuitGrid) {
                 grid.set(blockToPull.copy(coord = pulledCoord))
             }
         }
+        onSoundEvent?.invoke(RedstoneSoundEvent.PISTON_RETRACT)
     }
 
     private fun detectObserverTriggers() {

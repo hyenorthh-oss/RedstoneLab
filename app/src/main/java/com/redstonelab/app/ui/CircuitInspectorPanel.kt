@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.TouchApp
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.redstonelab.app.components.CyberBadge
 import com.redstonelab.app.components.GlassBox
 import com.redstonelab.app.components.GlassButton
+import com.redstonelab.app.components.GlassIconButton
 import com.redstonelab.app.model.BlockCoord
 import com.redstonelab.app.model.BlockState
 import com.redstonelab.app.theme.*
@@ -36,6 +38,7 @@ fun CircuitInspectorPanel(
     onInteract: () -> Unit,
     onRotate: () -> Unit,
     onDelete: () -> Unit,
+    onClose: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     GlassBox(
@@ -67,7 +70,10 @@ fun CircuitInspectorPanel(
                     letterSpacing = 0.8.sp
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     CyberBadge(
                         label = "CAM",
                         value = cameraOrientationLabel,
@@ -78,6 +84,15 @@ fun CircuitInspectorPanel(
                         value = "${selectedCoord.x}, ${selectedCoord.y}, ${selectedCoord.z}",
                         accentColor = TextWhite
                     )
+                    if (onClose != null) {
+                        GlassIconButton(
+                            onClick = onClose,
+                            icon = Icons.Default.Close,
+                            contentDescription = "Fechar Inspetor",
+                            size = 28.dp,
+                            accentColor = ButtonDefault
+                        )
+                    }
                 }
             }
 

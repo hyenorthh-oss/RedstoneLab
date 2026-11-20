@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.redstonelab.app.audio.SoundEffect
+import com.redstonelab.app.audio.SoundManager
 import com.redstonelab.app.engine.RedstoneEngine
 import com.redstonelab.app.engine.SimulationState
 import com.redstonelab.app.exporter.McpackExporter
@@ -85,6 +87,10 @@ class EditorViewModel : ViewModel() {
     var selectedBlockCoord by mutableStateOf<BlockCoord?>(null)
         private set
 
+    fun clearSelectedBlockCoord() {
+        selectedBlockCoord = null
+    }
+
     // Transformações da Câmera Isométrica
     var panOffset by mutableStateOf(Offset(450f, 400f))
     var zoom by mutableFloatStateOf(1.4f)
@@ -142,7 +148,50 @@ class EditorViewModel : ViewModel() {
     var localProjects by mutableStateOf<List<CircuitProjectMetadata>>(emptyList())
         private set
 
+    // Estados de Minimização dos Menus (visão 100% livre do tabuleiro)
+    var isTopBarMinimized by mutableStateOf(false)
+        private set
+
+    var isBottomPaletteMinimized by mutableStateOf(false)
+        private set
+
+    var isSidePanelMinimized by mutableStateOf(false)
+        private set
+
+    fun toggleTopBar() {
+        isTopBarMinimized = !isTopBarMinimized
+        SoundManager.play(SoundEffect.UI_TAP)
+    }
+
+    fun toggleBottomPalette() {
+        isBottomPaletteMinimized = !isBottomPaletteMinimized
+        SoundManager.play(SoundEffect.UI_TAP)
+    }
+
+    fun toggleSidePanel() {
+        isSidePanelMinimized = !isSidePanelMinimized
+        SoundManager.play(SoundEffect.UI_TAP)
+    }
+
+    fun restoreAllMenus() {
+        isTopBarMinimized = false
+        isBottomPaletteMinimized = false
+        isSidePanelMinimized = false
+        SoundManager.play(SoundEffect.UI_TAP)
+    }
+
+    fun toggleSoundMute(): Boolean {
+        return SoundManager.toggleMute()
+    }
+
+    private fun setupEngine() {
+        engine.onSoundEvent = { event ->
+            SoundManager.play(event)
+        }
+    }
+
     init {
+        setupEngine()
         // Inicializa com base de pedra lisa na camada 0
         clearToDefaultPlatform()
         saveHistorySnapshot()
@@ -162,8 +211,10 @@ class EditorViewModel : ViewModel() {
             val prevJson = undoStack.pop()
             circuitGrid = CircuitGrid.fromJson(prevJson)
             engine = RedstoneEngine(circuitGrid)
+            setupEngine()
             engine.recalculateWireSignals()
             circuitGrid = circuitGrid.clone()
+            SoundManager.play(SoundEffect.UI_TAP)
         }
     }
 
@@ -173,8 +224,10 @@ class EditorViewModel : ViewModel() {
             val nextJson = redoStack.pop()
             circuitGrid = CircuitGrid.fromJson(nextJson)
             engine = RedstoneEngine(circuitGrid)
+            setupEngine()
             engine.recalculateWireSignals()
             circuitGrid = circuitGrid.clone()
+            SoundManager.play(SoundEffect.UI_TAP)
         }
     }
 
@@ -302,30 +355,37 @@ class EditorViewModel : ViewModel() {
             when (block.type) {
                 BlockType.LEVER -> {
                     circuitGrid.set(block.toggleLever())
+                    SoundManager.play(SoundEffect.LEVER_CLICK)
                     handled = true
                 }
                 BlockType.STONE_BUTTON -> {
                     circuitGrid.set(block.triggerButton())
+                    SoundManager.play(SoundEffect.BUTTON_CLICK)
                     handled = true
                 }
                 BlockType.STONE_PRESSURE_PLATE -> {
                     circuitGrid.set(block.togglePressurePlate())
+                    SoundManager.play(SoundEffect.BUTTON_CLICK)
                     handled = true
                 }
                 BlockType.DAYLIGHT_DETECTOR -> {
                     circuitGrid.set(block.toggleDaylightDetector())
+                    SoundManager.play(SoundEffect.UI_TAP)
                     handled = true
                 }
                 BlockType.SCULK_SENSOR -> {
                     circuitGrid.set(block.triggerSculkSensor())
+                    SoundManager.play(SoundEffect.BELL)
                     handled = true
                 }
                 BlockType.REDSTONE_REPEATER -> {
                     circuitGrid.set(block.cycleDelay())
+                    SoundManager.play(SoundEffect.UI_TAP)
                     handled = true
                 }
                 BlockType.REDSTONE_COMPARATOR -> {
                     circuitGrid.set(block.toggleSubtractMode())
+                    SoundManager.play(SoundEffect.UI_TAP)
                     handled = true
                 }
                 else -> {}
@@ -351,6 +411,7 @@ class EditorViewModel : ViewModel() {
                 )
                 circuitGrid.set(newState)
                 vibrate(context, 15)
+                SoundManager.play(SoundEffect.BLOCK_PLACE)
                 refreshGridAndSimulate()
             }
 
@@ -359,12 +420,14 @@ class EditorViewModel : ViewModel() {
                     saveHistorySnapshot()
                     circuitGrid.remove(coord)
                     vibrate(context, 20)
+                    SoundManager.play(SoundEffect.BLOCK_BREAK)
                     refreshGridAndSimulate()
                 }
             }
 
             EditorTool.INSPECT -> {
                 // Mantém coord selecionada para o painel de inspeção
+                SoundManager.play(SoundEffect.UI_TAP)
             }
         }
     }
@@ -388,6 +451,7 @@ class EditorViewModel : ViewModel() {
             circuitGrid.set(block.copy(facing = block.facing.clockwise()))
         }
         vibrate(context, 30)
+        SoundManager.play(SoundEffect.UI_TAP)
         refreshGridAndSimulate()
     }
 
@@ -408,6 +472,7 @@ class EditorViewModel : ViewModel() {
             }
         }
         engine = RedstoneEngine(circuitGrid)
+        setupEngine()
         refreshGridAndSimulate()
         activeLayerY = 1
     }
@@ -431,6 +496,7 @@ class EditorViewModel : ViewModel() {
         circuitName = loaded.first
         circuitGrid = loaded.second
         engine = RedstoneEngine(circuitGrid)
+        setupEngine()
         refreshGridAndSimulate()
         activeLayerY = 1
     }
@@ -453,6 +519,7 @@ class EditorViewModel : ViewModel() {
         currentProjectId = UUID.randomUUID().toString()
         circuitGrid = preset.builder()
         engine = RedstoneEngine(circuitGrid)
+        setupEngine()
         refreshGridAndSimulate()
         panOffset = Offset(450f, 400f)
         zoom = 1.0f
