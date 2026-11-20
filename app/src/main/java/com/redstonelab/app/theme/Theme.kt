@@ -11,23 +11,23 @@ import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = NeonCyan,
-    onPrimary = CyberBlack,
-    primaryContainer = GlassSurfaceLight,
+    onPrimary = MatteBackground,
+    primaryContainer = MatteSurfaceElevated,
     onPrimaryContainer = TextPrimary,
     secondary = ElectricBlue,
     onSecondary = TextPrimary,
     secondaryContainer = SurfaceDarkElevated,
     onSecondaryContainer = TextPrimary,
     tertiary = NeonBlueLight,
-    onTertiary = CyberBlack,
-    background = CyberBlack,
+    onTertiary = MatteBackground,
+    background = MatteBackground,
     onBackground = TextPrimary,
-    surface = SpaceDark,
+    surface = MatteSurface,
     onSurface = TextPrimary,
-    surfaceVariant = SurfaceDark,
+    surfaceVariant = MatteSurfaceElevated,
     onSurfaceVariant = TextSecondary,
-    outline = GlassBorderSubtle,
-    outlineVariant = GlassBorder,
+    outline = MatteBorderSubtle,
+    outlineVariant = MatteBorder,
     error = StatusError,
     onError = TextPrimary
 )
@@ -38,8 +38,8 @@ fun RedstoneLabTheme(content: @Composable () -> Unit) {
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = CyberBlack.toArgb()
-            window.navigationBarColor = CyberBlack.toArgb()
+            window.statusBarColor = MatteBackground.toArgb()
+            window.navigationBarColor = MatteBackground.toArgb()
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = false
             insetsController.isAppearanceLightNavigationBars = false

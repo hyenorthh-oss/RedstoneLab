@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -48,12 +49,13 @@ fun EditorScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(CyberBlack)
+            .background(MatteBackground)
     ) {
-        // 1. Canvas Isométrico 2.5D de Alta Performance (60 FPS)
+        // 1. Canvas Isométrico 2.5D com Câmera Rotativa Interativa e Renderizador Voxel 3D
         IsometricCanvas(
             grid = viewModel.circuitGrid,
             activeLayerY = viewModel.activeLayerY,
+            cameraAngle = viewModel.cameraAngle,
             isOnionSkinEnabled = viewModel.isOnionSkinEnabled,
             showSignalNumbers = viewModel.showSignalNumbers,
             selectedBlockCoord = viewModel.selectedBlockCoord,
@@ -66,7 +68,7 @@ fun EditorScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Barra Superior em Paisagem
+        // 2. Barra Superior Fosca Moderna com Botões Arredondados
         GlassTopBar(
             viewModel = viewModel,
             modifier = Modifier
@@ -79,15 +81,15 @@ fun EditorScreen(
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 58.dp, end = 8.dp),
+                .padding(top = 56.dp, end = 8.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Seletor de Camadas Y
             GlassBox(
-                shape = RoundedCornerShape(12.dp),
-                backgroundColor = SurfaceDark,
-                borderColor = GlassBorderSubtle
+                shape = RoundedCornerShape(50),
+                backgroundColor = MatteSurfaceElevated,
+                borderColor = MatteBorder
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
@@ -98,7 +100,7 @@ fun EditorScreen(
                         onClick = { viewModel.setLayer(viewModel.activeLayerY - 1) },
                         icon = Icons.Default.Remove,
                         contentDescription = "Camada Abaixo",
-                        size = 30.dp
+                        size = 28.dp
                     )
 
                     CyberBadge(
@@ -111,7 +113,7 @@ fun EditorScreen(
                         onClick = { viewModel.setLayer(viewModel.activeLayerY + 1) },
                         icon = Icons.Default.Add,
                         contentDescription = "Camada Acima",
-                        size = 30.dp
+                        size = 28.dp
                     )
                 }
             }
@@ -128,6 +130,7 @@ fun EditorScreen(
                     CircuitInspectorPanel(
                         selectedCoord = coord,
                         blockState = block,
+                        cameraOrientationLabel = viewModel.cameraOrientationLabel,
                         isOnionSkinEnabled = viewModel.isOnionSkinEnabled,
                         showSignalNumbers = viewModel.showSignalNumbers,
                         onToggleOnionSkin = { viewModel.toggleOnionSkin() },
@@ -211,9 +214,9 @@ private fun GlassTopBar(
 
     GlassBox(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        backgroundColor = SurfaceDark,
-        borderColor = GlassBorderSubtle
+        shape = RoundedCornerShape(50),
+        backgroundColor = MatteSurfaceElevated,
+        borderColor = MatteBorder
     ) {
         Row(
             modifier = Modifier
@@ -222,7 +225,7 @@ private fun GlassTopBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Esquerda: Logo, Projetos e Presets
+            // Esquerda: Logo, Projetos e Exemplos
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -231,14 +234,14 @@ private fun GlassTopBar(
                     Box(
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(CircleShape)
                             .background(Brush.linearGradient(listOf(NeonCyan, ElectricBlue))),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = "Logo",
-                            tint = CyberBlack,
+                            tint = MatteBackground,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -246,12 +249,12 @@ private fun GlassTopBar(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     Text(
-                        text = "REDSTONELAB",
+                        text = "REDSTONELAB v2",
                         color = NeonCyan,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.8.sp
                     )
                 }
 
@@ -275,11 +278,43 @@ private fun GlassTopBar(
                 )
             }
 
-            // Centro: Simulação e Ticks
+            // Centro: Rotação da Câmera 3D, Simulação e Ticks
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
+                // Controles de Câmera 3D
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    GlassIconButton(
+                        onClick = { viewModel.rotateCameraCounterClockwise() },
+                        icon = Icons.Default.RotateLeft,
+                        contentDescription = "Girar Câmera Esquerda",
+                        size = 30.dp,
+                        accentColor = NeonCyan
+                    )
+
+                    GlassButton(
+                        onClick = { viewModel.resetCamera() },
+                        icon = Icons.Default.Explore,
+                        text = viewModel.cameraOrientationLabel,
+                        accentColor = NeonCyan,
+                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)
+                    )
+
+                    GlassIconButton(
+                        onClick = { viewModel.rotateCameraClockwise() },
+                        icon = Icons.Default.RotateRight,
+                        contentDescription = "Girar Câmera Direita",
+                        size = 30.dp,
+                        accentColor = NeonCyan
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
                 // SIMULAR / PAUSAR
                 val isSimRunning = viewModel.simulationState.isRunning
                 GlassButton(
@@ -307,7 +342,7 @@ private fun GlassTopBar(
                 )
             }
 
-            // Direita: Undo, Redo, Borracha, Girar, e EXPORTAR .MCPACK
+            // Direita: Undo, Redo, Borracha, Girar Bloco, e EXPORTAR .MCPACK
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -343,8 +378,8 @@ private fun GlassTopBar(
                 // Rotacionar Bloco
                 GlassIconButton(
                     onClick = { viewModel.rotateFacingClockwise() },
-                    icon = Icons.Default.RotateRight,
-                    contentDescription = "Rotacionar Bloco",
+                    icon = Icons.Default.Refresh,
+                    contentDescription = "Girar Bloco",
                     size = 30.dp,
                     accentColor = ElectricBlue
                 )
@@ -373,12 +408,12 @@ private fun GlassBottomPalette(
 ) {
     GlassBox(
         modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        backgroundColor = SurfaceDark,
-        borderColor = GlassBorderSubtle
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = MatteSurfaceElevated,
+        borderColor = MatteBorder
     ) {
         Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-            // 4 Abas de Categoria
+            // 4 Abas de Categoria com estilo Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -387,15 +422,15 @@ private fun GlassBottomPalette(
                     val isSelected = category == selectedCategory
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) NeonCyan.copy(alpha = 0.15f) else Color.Transparent)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (isSelected) NeonCyan.copy(alpha = 0.18f) else Color.Transparent)
                             .border(
                                 width = 1.dp,
-                                color = if (isSelected) NeonCyan else Color.Transparent,
-                                shape = RoundedCornerShape(6.dp)
+                                color = if (isSelected) NeonCyan else MatteBorderSubtle,
+                                shape = RoundedCornerShape(50)
                             )
                             .clickable { onCategorySelected(category) }
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = category.label.uppercase(),
@@ -410,7 +445,7 @@ private fun GlassBottomPalette(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Paleta deslizável com os blocos da categoria
+            // Paleta deslizável com botões arredondados (sem emojis)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -426,7 +461,7 @@ private fun GlassBottomPalette(
                         text = blockType.displayName.uppercase(),
                         isActive = isSelected,
                         accentColor = if (isSelected) NeonCyan else ElectricBlue,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     )
                 }
             }

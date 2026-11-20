@@ -31,21 +31,21 @@ import com.redstonelab.app.theme.*
 @Composable
 fun GlassBox(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(14.dp),
-    backgroundColor: Color = GlassSurface,
-    borderColor: Color = GlassBorderSubtle,
+    shape: Shape = RoundedCornerShape(16.dp),
+    backgroundColor: Color = MatteSurfaceElevated,
+    borderColor: Color = MatteBorder,
     borderWidth: Dp = 1.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
         modifier = modifier
-            .shadow(elevation = 8.dp, shape = shape, spotColor = NeonCyan.copy(alpha = 0.2f))
+            .shadow(elevation = 6.dp, shape = shape, spotColor = NeonCyan.copy(alpha = 0.15f))
             .clip(shape)
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        backgroundColor.copy(alpha = 0.85f),
-                        backgroundColor.copy(alpha = 0.70f)
+                        backgroundColor.copy(alpha = 0.92f),
+                        backgroundColor.copy(alpha = 0.85f)
                     )
                 )
             )
@@ -54,8 +54,8 @@ fun GlassBox(
                     width = borderWidth,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            borderColor.copy(alpha = 0.7f),
-                            borderColor.copy(alpha = 0.2f)
+                            borderColor.copy(alpha = 0.9f),
+                            borderColor.copy(alpha = 0.4f)
                         )
                     )
                 ),
@@ -73,12 +73,12 @@ fun GlassButton(
     text: String? = null,
     isActive: Boolean = false,
     accentColor: Color = NeonCyan,
-    shape: Shape = RoundedCornerShape(10.dp),
-    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    shape: Shape = RoundedCornerShape(50),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 7.dp)
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val borderColor = if (isActive) accentColor else GlassBorderSubtle
-    val bgColor = if (isActive) accentColor.copy(alpha = 0.22f) else GlassSurface
+    val borderColor = if (isActive) accentColor else MatteBorder
+    val bgColor = if (isActive) accentColor.copy(alpha = 0.22f) else MatteSurface
 
     Box(
         modifier = modifier
@@ -109,7 +109,7 @@ fun GlassButton(
                     imageVector = icon,
                     contentDescription = text,
                     tint = if (isActive) accentColor else TextPrimary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
             if (icon != null && text != null) {
@@ -119,10 +119,10 @@ fun GlassButton(
                 Text(
                     text = text,
                     color = if (isActive) accentColor else TextPrimary,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.8.sp
+                    letterSpacing = 0.6.sp
                 )
             }
         }
@@ -137,11 +137,11 @@ fun GlassIconButton(
     modifier: Modifier = Modifier,
     isActive: Boolean = false,
     accentColor: Color = NeonCyan,
-    size: Dp = 40.dp
+    size: Dp = 36.dp
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val borderColor = if (isActive) accentColor else GlassBorderSubtle
-    val bgColor = if (isActive) accentColor.copy(alpha = 0.24f) else GlassSurface
+    val borderColor = if (isActive) accentColor else MatteBorder
+    val bgColor = if (isActive) accentColor.copy(alpha = 0.24f) else MatteSurface
 
     Box(
         modifier = modifier
@@ -166,7 +166,7 @@ fun GlassIconButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = if (isActive) accentColor else TextPrimary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -180,16 +180,16 @@ fun CyberBadge(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(CyberBlack.copy(alpha = 0.8f))
-            .border(BorderStroke(1.dp, GlassBorderSubtle), RoundedCornerShape(6.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .clip(RoundedCornerShape(50))
+            .background(MatteBackground.copy(alpha = 0.9f))
+            .border(BorderStroke(1.dp, MatteBorderSubtle), RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             color = TextSecondary,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Medium,
             letterSpacing = 0.5.sp
@@ -198,7 +198,7 @@ fun CyberBadge(
         Text(
             text = value,
             color = accentColor,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )

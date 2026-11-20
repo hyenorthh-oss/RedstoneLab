@@ -2,22 +2,30 @@ package com.redstonelab.app.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Obsidian & Cyber Dark Backgrounds
-val CyberBlack = Color(0xFF060913)
-val SpaceDark = Color(0xFF090E1A)
-val SurfaceDark = Color(0xFF0E1626)
-val SurfaceDarkElevated = Color(0xFF142036)
+// Modern Dark Matte Backgrounds & Surfaces
+val MatteBackground = Color(0xFF0B0E14)
+val MatteSurface = Color(0xFF131822)
+val MatteSurfaceElevated = Color(0xFF1A2230)
+val MatteSurfaceInput = Color(0xFF0F141E)
 
-// Glassmorphism Tints & Borders
-val GlassSurface = Color(0xB80E1A2E)
-val GlassSurfaceLight = Color(0xCC142540)
-val GlassBorder = Color(0x6600F0FF)
-val GlassBorderSubtle = Color(0x333A6B9C)
-val GlassHighlight = Color(0x22FFFFFF)
+// Backward-compatible aliases
+val CyberBlack = MatteBackground
+val SpaceDark = MatteSurface
+val SurfaceDark = MatteSurfaceElevated
+val SurfaceDarkElevated = Color(0xFF222C3E)
+
+// Matte & Glass Borders
+val MatteBorder = Color(0xFF28364A)
+val MatteBorderSubtle = Color(0xFF1C2636)
+val GlassSurface = Color(0xE6131822)
+val GlassSurfaceLight = Color(0xF01A2230)
+val GlassBorder = Color(0xFF2E3E56)
+val GlassBorderSubtle = Color(0x662E3E56)
+val GlassHighlight = Color(0x1AFFFFFF)
 
 // Neon Cyber Accents
-val NeonCyan = Color(0xFF00F0FF)
-val NeonCyanDim = Color(0xFF00A2AD)
+val NeonCyan = Color(0xFF00E5FF)
+val NeonCyanDim = Color(0xFF00A2B0)
 val ElectricBlue = Color(0xFF0077FE)
 val NeonBlueLight = Color(0xFF45A6FF)
 
@@ -28,7 +36,7 @@ val RedstoneMid = Color(0xFFD61A28)
 val RedstoneFull = Color(0xFFFF2434)
 val RedstoneGlow = Color(0xFFFF5260)
 
-// Component Materials
+// Component Materials & Voxel Palettes
 val StoneGray = Color(0xFF5A6577)
 val StoneGrayDark = Color(0xFF3E4654)
 val StoneGrayLight = Color(0xFF7B889C)
@@ -41,12 +49,12 @@ val PistonHead = Color(0xFF8A623C)
 val StickySlime = Color(0xFF55B338)
 
 // Typography & State Colors
-val TextPrimary = Color(0xFFF0F6FC)
-val TextSecondary = Color(0xFF8BA2BE)
-val TextMuted = Color(0xFF546A85)
+val TextPrimary = Color(0xFFF1F5F9)
+val TextSecondary = Color(0xFF94A3B8)
+val TextMuted = Color(0xFF64748B)
 val StatusSuccess = Color(0xFF00E676)
 val StatusWarning = Color(0xFFFFAB00)
 val StatusError = Color(0xFFFF3344)
 val GridBackground = Color(0xFF080D18)
-val GridLineSubtle = Color(0xFF131D30)
-val GridLineActive = Color(0xFF1B3152)
+val GridLineSubtle = Color(0xFF162030)
+val GridLineActive = Color(0xFF223550)

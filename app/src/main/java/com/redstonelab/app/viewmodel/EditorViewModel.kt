@@ -88,6 +88,16 @@ class EditorViewModel : ViewModel() {
     // Transformações da Câmera Isométrica
     var panOffset by mutableStateOf(Offset(450f, 400f))
     var zoom by mutableFloatStateOf(1.0f)
+    var cameraAngle by mutableFloatStateOf(0f)
+
+    val cameraOrientationLabel: String
+        get() = when (((cameraAngle.toInt() % 360) + 360) % 360) {
+            0 -> "0° N"
+            90 -> "90° L"
+            180 -> "180° S"
+            270 -> "270° O"
+            else -> "${cameraAngle.toInt()}°"
+        }
 
     // Simulação
     var simulationState by mutableStateOf(SimulationState(tickRateHz = 10.0f))
@@ -183,6 +193,20 @@ class EditorViewModel : ViewModel() {
 
     fun rotateFacingClockwise() {
         selectedFacing = selectedFacing.clockwise()
+    }
+
+    // --- Controles de Câmera 3D ---
+
+    fun rotateCameraClockwise() {
+        cameraAngle = (cameraAngle + 90f) % 360f
+    }
+
+    fun rotateCameraCounterClockwise() {
+        cameraAngle = ((cameraAngle - 90f) % 360f + 360f) % 360f
+    }
+
+    fun resetCamera() {
+        cameraAngle = 0f
     }
 
     // --- Controles de Simulação ---
@@ -341,6 +365,7 @@ class EditorViewModel : ViewModel() {
 
     private fun refreshGridAndSimulate() {
         engine.recalculateWireSignals()
+        engine.updateActuators()
         circuitGrid = circuitGrid.clone()
         simulationState = simulationState.copy(activeSignalCount = circuitGrid.activeCount)
     }

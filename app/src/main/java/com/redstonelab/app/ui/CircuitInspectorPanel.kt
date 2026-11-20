@@ -27,6 +27,7 @@ import com.redstonelab.app.theme.*
 fun CircuitInspectorPanel(
     selectedCoord: BlockCoord,
     blockState: BlockState?,
+    cameraOrientationLabel: String,
     isOnionSkinEnabled: Boolean,
     showSignalNumbers: Boolean,
     onToggleOnionSkin: () -> Unit,
@@ -39,10 +40,10 @@ fun CircuitInspectorPanel(
     GlassBox(
         modifier = modifier
             .width(260.dp)
-            .padding(6.dp),
-        shape = RoundedCornerShape(14.dp),
-        backgroundColor = SurfaceDarkElevated,
-        borderColor = GlassBorder,
+            .padding(4.dp),
+        shape = RoundedCornerShape(16.dp),
+        backgroundColor = MatteSurfaceElevated,
+        borderColor = MatteBorder,
         borderWidth = 1.dp
     ) {
         Column(
@@ -65,11 +66,18 @@ fun CircuitInspectorPanel(
                     letterSpacing = 0.8.sp
                 )
 
-                CyberBadge(
-                    label = "POS",
-                    value = "${selectedCoord.x}, Y:${selectedCoord.y}, ${selectedCoord.z}",
-                    accentColor = ElectricBlue
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    CyberBadge(
+                        label = "CAM",
+                        value = cameraOrientationLabel,
+                        accentColor = NeonCyan
+                    )
+                    CyberBadge(
+                        label = "POS",
+                        value = "${selectedCoord.x}, ${selectedCoord.y}, ${selectedCoord.z}",
+                        accentColor = ElectricBlue
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -115,9 +123,9 @@ fun CircuitInspectorPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
+                        .clip(RoundedCornerShape(50)),
                     color = if (blockState.power > 0) RedstoneFull else RedstoneOff,
-                    trackColor = CyberBlack
+                    trackColor = MatteBackground
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -150,7 +158,7 @@ fun CircuitInspectorPanel(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Botões de Ação Rápida
+                // Botões de Ação Rápida (Pill Rounded)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)

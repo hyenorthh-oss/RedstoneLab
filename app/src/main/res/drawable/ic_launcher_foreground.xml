@@ -4,16 +4,65 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Ambient Redstone Bloom Aura -->
+    <path
+        android:fillColor="#33FF2434"
+        android:pathData="M54,26 A28,28 0 1,0 54,82 A28,28 0 1,0 54,26 Z" />
+
+    <!-- 3D Voxel Redstone Block: Left Face (Ambient Side) -->
+    <path
+        android:fillColor="#D61A28"
+        android:pathData="M32,44 L54,56 L54,80 L32,68 Z" />
+
+    <!-- 3D Voxel Redstone Block: Right Face (Shadow Side) -->
+    <path
+        android:fillColor="#7A151C"
+        android:pathData="M54,56 L76,44 L76,68 L54,80 Z" />
+
+    <!-- 3D Voxel Redstone Block: Top Face (Highlight Side) -->
+    <path
+        android:fillColor="#FF2434"
+        android:pathData="M54,32 L76,44 L54,56 L32,44 Z" />
+
+    <!-- Top Bevel Highlight Edge -->
+    <path
+        android:strokeColor="#FFFF8595"
+        android:strokeWidth="1.5"
+        android:pathData="M32,44 L54,32 L76,44" />
+
+    <!-- Crisp Block Outline -->
+    <path
+        android:strokeColor="#22000000"
+        android:strokeWidth="1.2"
+        android:pathData="M54,32 L76,44 L76,68 L54,80 L32,68 L32,44 Z" />
+    <path
+        android:strokeColor="#22000000"
+        android:strokeWidth="1.0"
+        android:pathData="M54,56 L54,80" />
+    <path
+        android:strokeColor="#22000000"
+        android:strokeWidth="1.0"
+        android:pathData="M32,44 L54,56 L76,44" />
+
+    <!-- Redstone Crystal Cluster Flecks -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M30,30h48v12h-48z" />
+        android:pathData="M52,42 h4 v4 h-4 z" />
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M30,48h36v12h-36z" />
+        android:fillColor="#FFFFBAC2"
+        android:pathData="M43,46 h3 v3 h-3 z" />
     <path
-        android:fillColor="#00E676"
-        android:pathData="M30,66h24v12h-24z" />
+        android:fillColor="#FFFFBAC2"
+        android:pathData="M62,40 h3 v3 h-3 z" />
     <path
-        android:fillColor="#00E676"
-        android:pathData="M70,58l-8,8l-4,-4l-3,3l7,7l11,-11z" />
+        android:fillColor="#FFFF8595"
+        android:pathData="M41,56 h3 v3 h-3 z" />
+    <path
+        android:fillColor="#FFFF8595"
+        android:pathData="M64,56 h3 v3 h-3 z" />
+
+    <!-- Cyan Pulse Logic Spark at Crown -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M54,23 L56,27 L60,27 L57,30 L58,34 L54,31 L50,34 L51,30 L48,27 L52,27 Z" />
 </vector>

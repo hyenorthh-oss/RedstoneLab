@@ -154,10 +154,13 @@ class RedstoneEngine(val grid: CircuitGrid) {
             val desiredOutput = if (rearPower > 0) 15 else 0
 
             if (state.power != desiredOutput) {
+                repeaterQueue.removeAll { it.coord == coord && it.targetPower != desiredOutput }
                 val alreadyScheduled = repeaterQueue.any { it.coord == coord && it.targetPower == desiredOutput }
                 if (!alreadyScheduled) {
                     repeaterQueue.add(ScheduledRepeaterEvent(coord, desiredOutput, state.delay))
                 }
+            } else {
+                repeaterQueue.removeAll { it.coord == coord }
             }
         }
     }
@@ -185,10 +188,13 @@ class RedstoneEngine(val grid: CircuitGrid) {
             val targetActive = !isBasePowered
 
             if (state.isActive != targetActive) {
+                torchQueue.removeAll { it.coord == coord && it.targetActive != targetActive }
                 val alreadyScheduled = torchQueue.any { it.coord == coord && it.targetActive == targetActive }
                 if (!alreadyScheduled) {
                     torchQueue.add(ScheduledTorchEvent(coord, targetActive, 1))
                 }
+            } else {
+                torchQueue.removeAll { it.coord == coord }
             }
         }
     }
@@ -377,11 +383,11 @@ class RedstoneEngine(val grid: CircuitGrid) {
             BlockType.REDSTONE_COMPARATOR -> if (block.facing == towards) block.power else 0
             BlockType.REDSTONE_WIRE -> block.power
             BlockType.OBSERVER -> if (block.facing.opposite == towards && block.pulseTicksLeft > 0) 15 else 0
-            else -> if (block.type.isSolidConductor && isBlockHardPowered(coord)) 15 else 0
+            else -> if (block.type.isSolidConductor && (isBlockHardPowered(coord) || isBlockSoftOrHardPowered(coord))) 15 else 0
         }
     }
 
-    private fun updateActuators() {
+    fun updateActuators() {
         val all = grid.getAll()
         for ((coord, state) in all) {
             val isPowered = isBlockSoftOrHardPowered(coord)

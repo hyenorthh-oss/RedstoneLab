@@ -118,4 +118,29 @@ class RedstoneEngineTest {
         assertFalse(grid.get(0, 1, 0)!!.isExtended)
         assertEquals(BlockType.SMOOTH_STONE, grid.get(1, 1, 0)?.type)
     }
+
+    @Test
+    fun testRepeaterExtractsSignalFromSoftPoweredSolidBlock() {
+        val grid = CircuitGrid()
+        // Lever -> Wire -> Stone Block -> Repeater (facing East) -> Wire
+        grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.LEVER, isActive = true, power = 15))
+        grid.set(BlockState(BlockCoord(1, 1, 0), BlockType.REDSTONE_WIRE))
+        grid.set(BlockState(BlockCoord(2, 1, 0), BlockType.SMOOTH_STONE))
+        grid.set(BlockState(BlockCoord(3, 1, 0), BlockType.REDSTONE_REPEATER, facing = Facing.EAST, delay = 1))
+        grid.set(BlockState(BlockCoord(4, 1, 0), BlockType.REDSTONE_WIRE))
+
+        val engine = RedstoneEngine(grid)
+        engine.recalculateWireSignals()
+
+        // Wire at (1,1,0) should have 14 power
+        assertEquals(14, grid.get(1, 1, 0)?.power)
+
+        // Tick 1: Repeater at (3,1,0) extracts signal from soft-powered stone at (2,1,0) and schedules output
+        engine.stepTick()
+        // Tick 2: Repeater fires output 15
+        engine.stepTick()
+
+        assertEquals(15, grid.get(3, 1, 0)?.power)
+        assertEquals(15, grid.get(4, 1, 0)?.power)
+    }
 }
