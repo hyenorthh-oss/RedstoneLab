@@ -132,8 +132,8 @@ class RedstoneEngineTest {
         val engine = RedstoneEngine(grid)
         engine.recalculateWireSignals()
 
-        // Wire at (1,1,0) should have 14 power
-        assertEquals(14, grid.get(1, 1, 0)?.power)
+        // Wire at (1,1,0) directly adjacent to active lever has full 15 power
+        assertEquals(15, grid.get(1, 1, 0)?.power)
 
         // Tick 1: Repeater at (3,1,0) extracts signal from soft-powered stone at (2,1,0) and schedules output
         engine.stepTick()

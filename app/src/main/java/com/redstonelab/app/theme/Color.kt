@@ -2,41 +2,48 @@ package com.redstonelab.app.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Modern Dark Matte Backgrounds & Surfaces
-val MatteBackground = Color(0xFF0B0E14)
-val MatteSurface = Color(0xFF131822)
-val MatteSurfaceElevated = Color(0xFF1A2230)
-val MatteSurfaceInput = Color(0xFF0F141E)
+// Industrial Matte Dark Palette (100% Non-Cyan, Non-Glassmorphism)
+val CanvasBg = Color(0xFF121316)
+val SurfaceBar = Color(0xFF1B1D21)
+val SurfaceElevated = Color(0xFF22252A)
+val BorderSubtle = Color(0xFF2E323A)
+val ButtonDefault = Color(0xFF262930)
+val ButtonBorder = Color(0xFF3A3E47)
+val ButtonActive = Color(0xFF343842)
+val TextWhite = Color(0xFFF2F2F2)
+val TextSecondary = Color(0xFF9EABB8)
+val TextMuted = Color(0xFF6B7280)
 
-// Backward-compatible aliases
-val CyberBlack = MatteBackground
-val SpaceDark = MatteSurface
-val SurfaceDark = MatteSurfaceElevated
-val SurfaceDarkElevated = Color(0xFF222C3E)
-
-// Matte & Glass Borders
-val MatteBorder = Color(0xFF28364A)
-val MatteBorderSubtle = Color(0xFF1C2636)
-val GlassSurface = Color(0xE6131822)
-val GlassSurfaceLight = Color(0xF01A2230)
-val GlassBorder = Color(0xFF2E3E56)
-val GlassBorderSubtle = Color(0x662E3E56)
-val GlassHighlight = Color(0x1AFFFFFF)
-
-// Neon Cyber Accents
-val NeonCyan = Color(0xFF00E5FF)
-val NeonCyanDim = Color(0xFF00A2B0)
-val ElectricBlue = Color(0xFF0077FE)
-val NeonBlueLight = Color(0xFF45A6FF)
-
-// Redstone Signal Palettes
+// Redstone Matte Accents (Industrial & Punchy)
+val RedstoneAccent = Color(0xFF9E262A)
+val RedstoneAccentPressed = Color(0xFFB52B30)
+val RedstoneBright = Color(0xFFFF2434)
 val RedstoneOff = Color(0xFF381014)
+val RedstoneGlow = Color(0xFFFF3344)
+
+// Selection & State Indicators
+val BorderSelected = Color(0xFFFFFFFF)
+val StatusSuccess = Color(0xFF22C55E)
+val StatusWarning = Color(0xFFF59E0B)
+val StatusError = Color(0xFFEF4444)
+
+// Backward-compatibility aliases for existing imports
+val CyberBlack = CanvasBg
+val SpaceDark = SurfaceBar
+val SurfaceDark = SurfaceBar
+val SurfaceDarkElevated = SurfaceElevated
+val GlassSurface = SurfaceBar
+val GlassSurfaceLight = SurfaceElevated
+val GlassBorder = BorderSubtle
+val GlassBorderSubtle = BorderSubtle
+val GlassHighlight = Color(0x1AFFFFFF)
+val NeonCyan = RedstoneAccent
+val NeonCyanDim = RedstoneAccent
+val ElectricBlue = ButtonActive
+val NeonBlueLight = TextWhite
 val RedstoneDim = Color(0xFF7A151C)
 val RedstoneMid = Color(0xFFD61A28)
-val RedstoneFull = Color(0xFFFF2434)
-val RedstoneGlow = Color(0xFFFF5260)
-
-// Component Materials & Voxel Palettes
+val RedstoneFull = RedstoneBright
 val StoneGray = Color(0xFF5A6577)
 val StoneGrayDark = Color(0xFF3E4654)
 val StoneGrayLight = Color(0xFF7B889C)
@@ -44,17 +51,10 @@ val WoodBrown = Color(0xFF704E31)
 val GlassTransparent = Color(0x44A0D8EF)
 val LampOff = Color(0xFF382618)
 val LampOn = Color(0xFFFFB300)
-val ObserverEye = Color(0xFF00E5FF)
+val ObserverEye = Color(0xFFD32F2F)
 val PistonHead = Color(0xFF8A623C)
 val StickySlime = Color(0xFF55B338)
-
-// Typography & State Colors
-val TextPrimary = Color(0xFFF1F5F9)
-val TextSecondary = Color(0xFF94A3B8)
-val TextMuted = Color(0xFF64748B)
-val StatusSuccess = Color(0xFF00E676)
-val StatusWarning = Color(0xFFFFAB00)
-val StatusError = Color(0xFFFF3344)
-val GridBackground = Color(0xFF080D18)
-val GridLineSubtle = Color(0xFF162030)
-val GridLineActive = Color(0xFF223550)
+val TextPrimary = TextWhite
+val GridBackground = CanvasBg
+val GridLineSubtle = Color(0xFF1E2127)
+val GridLineActive = Color(0xFF2E333D)

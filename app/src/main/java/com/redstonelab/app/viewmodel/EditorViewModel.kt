@@ -87,17 +87,36 @@ class EditorViewModel : ViewModel() {
 
     // Transformações da Câmera Isométrica
     var panOffset by mutableStateOf(Offset(450f, 400f))
-    var zoom by mutableFloatStateOf(1.0f)
-    var cameraAngle by mutableFloatStateOf(0f)
+    var zoom by mutableFloatStateOf(1.4f)
+    var cameraRotation by mutableIntStateOf(0) // 0: 0° N, 1: 90° L, 2: 180° S, 3: 270° O
+    val cameraAngle: Float get() = cameraRotation * 90f
+    private var isCameraInitialized = false
 
     val cameraOrientationLabel: String
-        get() = when (((cameraAngle.toInt() % 360) + 360) % 360) {
+        get() = when (cameraRotation % 4) {
             0 -> "0° N"
-            90 -> "90° L"
-            180 -> "180° S"
-            270 -> "270° O"
-            else -> "${cameraAngle.toInt()}°"
+            1 -> "90° L"
+            2 -> "180° S"
+            3 -> "270° O"
+            else -> "0° N"
         }
+
+    fun initializeCamera(screenWidth: Float, screenHeight: Float) {
+        if (isCameraInitialized || screenWidth <= 0f || screenHeight <= 0f) return
+        isCameraInitialized = true
+
+        val usableHeight = (screenHeight - 160f).coerceAtLeast(300f)
+        val targetZoom = (usableHeight * 0.80f / 480f).coerceIn(1.1f, 2.5f)
+        zoom = targetZoom
+
+        val centerX = screenWidth / 2f
+        val centerY = screenHeight / 2f - (15f * 16f * targetZoom - 1f * 24f * targetZoom) + (targetZoom * 40f)
+        panOffset = Offset(centerX, centerY)
+    }
+
+    fun rotateCamera() {
+        cameraRotation = (cameraRotation + 1) % 4
+    }
 
     // Simulação
     var simulationState by mutableStateOf(SimulationState(tickRateHz = 10.0f))
@@ -171,10 +190,18 @@ class EditorViewModel : ViewModel() {
     }
 
     fun setTool(tool: EditorTool) {
+        if (simulationState.isRunning && (tool == EditorTool.PLACE || tool == EditorTool.ERASE)) {
+            pauseSimulation()
+        }
+        editorMode = EditorMode.BUILD
         selectedTool = tool
     }
 
     fun setBlockType(type: BlockType) {
+        if (simulationState.isRunning) {
+            pauseSimulation()
+        }
+        editorMode = EditorMode.BUILD
         selectedBlockType = type
         selectedTool = EditorTool.PLACE
     }
@@ -236,6 +263,7 @@ class EditorViewModel : ViewModel() {
         simulationState = simulationState.copy(isRunning = false)
         simulationJob?.cancel()
         simulationJob = null
+        editorMode = EditorMode.BUILD
     }
 
     fun stepSingleTick() {

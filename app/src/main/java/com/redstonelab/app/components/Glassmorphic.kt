@@ -16,8 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -31,34 +29,18 @@ import com.redstonelab.app.theme.*
 @Composable
 fun GlassBox(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(16.dp),
-    backgroundColor: Color = MatteSurfaceElevated,
-    borderColor: Color = MatteBorder,
+    shape: Shape = RoundedCornerShape(20.dp),
+    backgroundColor: Color = SurfaceBar,
+    borderColor: Color = BorderSubtle,
     borderWidth: Dp = 1.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(
         modifier = modifier
-            .shadow(elevation = 6.dp, shape = shape, spotColor = NeonCyan.copy(alpha = 0.15f))
             .clip(shape)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        backgroundColor.copy(alpha = 0.92f),
-                        backgroundColor.copy(alpha = 0.85f)
-                    )
-                )
-            )
+            .background(backgroundColor)
             .border(
-                border = BorderStroke(
-                    width = borderWidth,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            borderColor.copy(alpha = 0.9f),
-                            borderColor.copy(alpha = 0.4f)
-                        )
-                    )
-                ),
+                border = BorderStroke(width = borderWidth, color = borderColor),
                 shape = shape
             ),
         content = content
@@ -72,16 +54,27 @@ fun GlassButton(
     icon: ImageVector? = null,
     text: String? = null,
     isActive: Boolean = false,
-    accentColor: Color = NeonCyan,
-    shape: Shape = RoundedCornerShape(50),
-    contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 7.dp)
+    accentColor: Color = RedstoneAccent,
+    shape: Shape = CircleShape,
+    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 10.dp)
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val borderColor = if (isActive) accentColor else MatteBorder
-    val bgColor = if (isActive) accentColor.copy(alpha = 0.22f) else MatteSurface
+
+    val bgColor = when {
+        isActive && accentColor == RedstoneAccent -> RedstoneAccent
+        isActive -> ButtonActive
+        else -> ButtonDefault
+    }
+
+    val borderColor = when {
+        isActive && accentColor == RedstoneAccent -> RedstoneAccentPressed
+        isActive -> BorderSelected
+        else -> ButtonBorder
+    }
 
     Box(
         modifier = modifier
+            .heightIn(min = 46.dp)
             .clip(shape)
             .background(bgColor)
             .border(
@@ -93,7 +86,7 @@ fun GlassButton(
             )
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, color = accentColor),
+                indication = ripple(bounded = true, color = RedstoneAccentPressed),
                 onClick = onClick
             )
             .padding(contentPadding),
@@ -108,21 +101,21 @@ fun GlassButton(
                 Icon(
                     imageVector = icon,
                     contentDescription = text,
-                    tint = if (isActive) accentColor else TextPrimary,
-                    modifier = Modifier.size(16.dp)
+                    tint = TextWhite,
+                    modifier = Modifier.size(18.dp)
                 )
             }
             if (icon != null && text != null) {
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(8.dp))
             }
             if (text != null) {
                 Text(
                     text = text,
-                    color = if (isActive) accentColor else TextPrimary,
-                    fontSize = 11.sp,
+                    color = TextWhite,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp
+                    letterSpacing = 0.5.sp
                 )
             }
         }
@@ -136,12 +129,22 @@ fun GlassIconButton(
     contentDescription: String,
     modifier: Modifier = Modifier,
     isActive: Boolean = false,
-    accentColor: Color = NeonCyan,
-    size: Dp = 36.dp
+    accentColor: Color = RedstoneAccent,
+    size: Dp = 46.dp
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val borderColor = if (isActive) accentColor else MatteBorder
-    val bgColor = if (isActive) accentColor.copy(alpha = 0.24f) else MatteSurface
+
+    val bgColor = when {
+        isActive && accentColor == RedstoneAccent -> RedstoneAccent
+        isActive -> ButtonActive
+        else -> ButtonDefault
+    }
+
+    val borderColor = when {
+        isActive && accentColor == RedstoneAccent -> RedstoneAccentPressed
+        isActive -> BorderSelected
+        else -> ButtonBorder
+    }
 
     Box(
         modifier = modifier
@@ -157,7 +160,7 @@ fun GlassIconButton(
             )
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, color = accentColor),
+                indication = ripple(bounded = true, color = RedstoneAccentPressed),
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
@@ -165,8 +168,8 @@ fun GlassIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = if (isActive) accentColor else TextPrimary,
-            modifier = Modifier.size(18.dp)
+            tint = TextWhite,
+            modifier = Modifier.size(20.dp)
         )
     }
 }
@@ -176,29 +179,29 @@ fun CyberBadge(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    accentColor: Color = NeonCyan
+    accentColor: Color = RedstoneAccent
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(MatteBackground.copy(alpha = 0.9f))
-            .border(BorderStroke(1.dp, MatteBorderSubtle), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .clip(CircleShape)
+            .background(ButtonDefault)
+            .border(BorderStroke(1.dp, BorderSubtle), CircleShape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             color = TextSecondary,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Medium,
             letterSpacing = 0.5.sp
         )
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = value,
-            color = accentColor,
-            fontSize = 10.sp,
+            color = if (accentColor == RedstoneAccent) RedstoneBright else TextWhite,
+            fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )

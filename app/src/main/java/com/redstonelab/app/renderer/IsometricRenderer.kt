@@ -1,9 +1,15 @@
 package com.redstonelab.app.renderer
 
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -13,14 +19,41 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.redstonelab.app.model.BlockCoord
 import com.redstonelab.app.model.BlockState
 import com.redstonelab.app.model.BlockType
 import com.redstonelab.app.model.CircuitGrid
 import com.redstonelab.app.model.Facing
 import com.redstonelab.app.theme.*
+
+private val srcPoly = floatArrayOf(
+    0f, 0f,
+    16f, 0f,
+    16f, 16f,
+    0f, 16f
+)
+private val dstPoly = FloatArray(8)
+private val tempMatrix = Matrix()
+
+private val baseTopPaint = Paint().apply {
+    isFilterBitmap = false
+    isAntiAlias = false
+}
+private val baseLeftPaint = Paint().apply {
+    isFilterBitmap = false
+    isAntiAlias = false
+    colorFilter = PorterDuffColorFilter(0x38000000, PorterDuff.Mode.SRC_ATOP)
+}
+private val baseRightPaint = Paint().apply {
+    isFilterBitmap = false
+    isAntiAlias = false
+    colorFilter = PorterDuffColorFilter(0x6B000000, PorterDuff.Mode.SRC_ATOP)
+}
 
 @Composable
 fun IsometricCanvas(
@@ -78,29 +111,62 @@ fun IsometricCanvas(
         val hh = transform.metrics.halfHeight * zoom
         val elev = transform.metrics.tileElevation * zoom
 
-        // 1. Grade Isométrica de Referência para a Camada Ativa (Rotacionada com a Câmera)
-        drawIsoGridPlane(
+        // 1. Onion Skin (Camadas Inferiores Y - 1, etc.)
+        if (isOnionSkinEnabled && activeLayerY > 0) {
+            val lowerBlocks = grid.getAll().values.filter { it.y < activeLayerY }
+            val sortedLower = lowerBlocks.sortedWith(
+                compareBy<BlockState> { it.y }
+                    .thenBy { transform.computeDepth(it.x.toFloat(), it.z.toFloat()) }
+            )
+            for (block in sortedLower) {
+                val center = transform.gridToScreen(
+                    block.x.toFloat(),
+                    block.y.toFloat(),
+                    block.z.toFloat(),
+                    panOffset,
+                    zoom
+                )
+                drawIsometricBlock(
+                    transform = transform,
+                    block = block,
+                    center = center,
+                    hw = hw,
+                    hh = hh,
+                    elev = elev,
+                    alpha = 0.35f,
+                    isGhost = true,
+                    showSignalNumbers = false,
+                    grid = grid,
+                    panOffset = panOffset,
+                    zoom = zoom
+                )
+            }
+        }
+
+        // 2. Tabuleiro / Plataforma Grossa da Camada Ativa
+        drawFloorPlatform(
             transform = transform,
             layerY = activeLayerY,
             panOffset = panOffset,
-            zoom = zoom
+            zoom = zoom,
+            hw = hw,
+            hh = hh,
+            elev = elev
         )
 
-        // 2. Filtro de blocos conforme modo Onion Skin ou 3D Completo
+        // 3. Blocos 3D da Camada Ativa (ou todas as camadas se Onion Skin desativado)
         val allBlocks = grid.getAll().values.toList()
         val blocksToDraw = if (isOnionSkinEnabled) {
-            allBlocks.filter { it.y <= activeLayerY }
+            allBlocks.filter { it.y == activeLayerY }
         } else {
             allBlocks
         }
 
-        // 3. Ordenação por profundidade correta para qualquer ângulo de rotação da câmera
         val sortedBlocks = blocksToDraw.sortedWith(
             compareBy<BlockState> { it.y }
                 .thenBy { transform.computeDepth(it.x.toFloat(), it.z.toFloat()) }
         )
 
-        // 4. Renderização Voxel 3D com estilo Pixel-Art dos Blocos
         for (block in sortedBlocks) {
             val center = transform.gridToScreen(
                 block.x.toFloat(),
@@ -110,15 +176,6 @@ fun IsometricCanvas(
                 zoom
             )
 
-            val isCurrentLayer = block.y == activeLayerY
-            val alpha = when {
-                isCurrentLayer -> 1.0f
-                block.y < activeLayerY -> {
-                    if (isOnionSkinEnabled) 0.35f else 0.70f
-                }
-                else -> 0.40f
-            }
-
             drawIsometricBlock(
                 transform = transform,
                 block = block,
@@ -126,8 +183,8 @@ fun IsometricCanvas(
                 hw = hw,
                 hh = hh,
                 elev = elev,
-                alpha = alpha,
-                isGhost = !isCurrentLayer && isOnionSkinEnabled,
+                alpha = 1.0f,
+                isGhost = false,
                 showSignalNumbers = showSignalNumbers,
                 grid = grid,
                 panOffset = panOffset,
@@ -135,7 +192,7 @@ fun IsometricCanvas(
             )
         }
 
-        // 5. Cursor Diamante Holográfico na Camada Ativa
+        // 4. Cursor de Seleção da Camada Ativa
         if (selectedBlockCoord != null && selectedBlockCoord.y == activeLayerY) {
             drawCursor(
                 transform = transform,
@@ -147,34 +204,97 @@ fun IsometricCanvas(
     }
 }
 
-private fun DrawScope.drawIsoGridPlane(
+/**
+ * Desenha a plataforma física da camada ativa com ladrilhos de pedra e borda 3D visível.
+ */
+private fun DrawScope.drawFloorPlatform(
     transform: IsometricTransform,
     layerY: Int,
     panOffset: Offset,
-    zoom: Float
+    zoom: Float,
+    hw: Float,
+    hh: Float,
+    elev: Float
 ) {
-    val size = 16
-    for (x in 0..size) {
-        val start = transform.gridToScreen(x.toFloat(), layerY.toFloat(), 0f, panOffset, zoom)
-        val end = transform.gridToScreen(x.toFloat(), layerY.toFloat(), size.toFloat(), panOffset, zoom)
-        drawLine(
-            color = if (x == 0 || x == size) GridLineActive else GridLineSubtle,
-            start = start,
-            end = end,
-            strokeWidth = if (x == 0 || x == size) 1.6f else 1.0f
-        )
+    val floorBmp = VoxelTextureAtlas.getTexture("FLOOR_TILE")
+
+    // Desenha cada um dos 16x16 ladrilhos
+    for (x in 0 until 16) {
+        for (z in 0 until 16) {
+            val center = transform.gridToScreen(
+                x.toFloat(),
+                layerY.toFloat(),
+                z.toFloat(),
+                panOffset,
+                zoom
+            )
+
+            if (floorBmp != null) {
+                drawIntoCanvas { canvas ->
+                    dstPoly[0] = center.x
+                    dstPoly[1] = center.y - hh
+                    dstPoly[2] = center.x + hw
+                    dstPoly[3] = center.y
+                    dstPoly[4] = center.x
+                    dstPoly[5] = center.y + hh
+                    dstPoly[6] = center.x - hw
+                    dstPoly[7] = center.y
+                    tempMatrix.setPolyToPoly(srcPoly, 0, dstPoly, 0, 4)
+                    canvas.nativeCanvas.drawBitmap(floorBmp, tempMatrix, baseTopPaint)
+                }
+            } else {
+                val tilePath = Path().apply {
+                    moveTo(center.x, center.y - hh)
+                    lineTo(center.x + hw, center.y)
+                    lineTo(center.x, center.y + hh)
+                    lineTo(center.x - hw, center.y)
+                    close()
+                }
+                drawPath(tilePath, color = Color(0xFF23262D), style = Fill)
+                drawPath(tilePath, color = Color(0xFF1B1D22), style = Stroke(width = 1.0f))
+            }
+        }
     }
 
-    for (z in 0..size) {
-        val start = transform.gridToScreen(0f, layerY.toFloat(), z.toFloat(), panOffset, zoom)
-        val end = transform.gridToScreen(size.toFloat(), layerY.toFloat(), z.toFloat(), panOffset, zoom)
-        drawLine(
-            color = if (z == 0 || z == size) GridLineActive else GridLineSubtle,
-            start = start,
-            end = end,
-            strokeWidth = if (z == 0 || z == size) 1.6f else 1.0f
-        )
+    // Borda 3D extrudada da plataforma nos limites visíveis
+    val rimThickness = elev * 0.45f
+    val stoneBmp = VoxelTextureAtlas.getTexture("SMOOTH_STONE")
+
+    for (x in 0 until 16) {
+        val center = transform.gridToScreen(x.toFloat(), layerY.toFloat(), 15f, panOffset, zoom)
+        drawPlatformSide(center, hw, hh, rimThickness, isLeft = false, stoneBmp)
     }
+    for (z in 0 until 16) {
+        val center = transform.gridToScreen(15f, layerY.toFloat(), z.toFloat(), panOffset, zoom)
+        drawPlatformSide(center, hw, hh, rimThickness, isLeft = true, stoneBmp)
+    }
+}
+
+private fun DrawScope.drawPlatformSide(
+    center: Offset,
+    hw: Float,
+    hh: Float,
+    thickness: Float,
+    isLeft: Boolean,
+    stoneBmp: Bitmap?
+) {
+    val path = Path().apply {
+        if (isLeft) {
+            moveTo(center.x - hw, center.y)
+            lineTo(center.x, center.y + hh)
+            lineTo(center.x, center.y + hh + thickness)
+            lineTo(center.x - hw, center.y + thickness)
+        } else {
+            moveTo(center.x, center.y + hh)
+            lineTo(center.x + hw, center.y)
+            lineTo(center.x + hw, center.y + thickness)
+            lineTo(center.x, center.y + hh + thickness)
+        }
+        close()
+    }
+    val sideColor = if (isLeft) Color(0xFF1D1F25) else Color(0xFF16181C)
+    drawPath(path, color = sideColor, style = Fill)
+    drawPath(path, color = Color(0xFF0F1013), style = Stroke(width = 1.0f))
 }
 
 private fun DrawScope.drawCursor(
@@ -199,80 +319,13 @@ private fun DrawScope.drawCursor(
         lineTo(p4.x, p4.y)
         close()
     }
-    drawPath(path = path, color = NeonCyan.copy(alpha = 0.22f), style = Fill)
-    drawPath(path = path, color = NeonCyan, style = Stroke(width = 2.2f))
+    drawPath(path = path, color = RedstoneAccent.copy(alpha = 0.25f), style = Fill)
+    drawPath(path = path, color = BorderSelected, style = Stroke(width = 2.0f))
 }
 
-private fun DrawScope.drawVoxelCube(
-    center: Offset,
-    hw: Float,
-    hh: Float,
-    elev: Float,
-    topColor: Color,
-    leftColor: Color,
-    rightColor: Color,
-    bevelColor: Color? = null,
-    outlineColor: Color = Color(0x33000000),
-    glowColor: Color? = null
-) {
-    val topPath = Path().apply {
-        moveTo(center.x, center.y - hh - elev)
-        lineTo(center.x + hw, center.y - elev)
-        lineTo(center.x, center.y + hh - elev)
-        lineTo(center.x - hw, center.y - elev)
-        close()
-    }
-    drawPath(path = topPath, color = topColor, style = Fill)
-
-    val leftPath = Path().apply {
-        moveTo(center.x - hw, center.y - elev)
-        lineTo(center.x, center.y + hh - elev)
-        lineTo(center.x, center.y + hh)
-        lineTo(center.x - hw, center.y)
-        close()
-    }
-    drawPath(path = leftPath, color = leftColor, style = Fill)
-
-    val rightPath = Path().apply {
-        moveTo(center.x, center.y + hh - elev)
-        lineTo(center.x + hw, center.y - elev)
-        lineTo(center.x + hw, center.y)
-        lineTo(center.x, center.y + hh)
-        close()
-    }
-    drawPath(path = rightPath, color = rightColor, style = Fill)
-
-    // Pixel Bevel Highlights
-    if (bevelColor != null) {
-        drawLine(
-            color = bevelColor,
-            start = Offset(center.x - hw, center.y - elev),
-            end = Offset(center.x, center.y - hh - elev),
-            strokeWidth = 1.4f
-        )
-        drawLine(
-            color = bevelColor,
-            start = Offset(center.x, center.y - hh - elev),
-            end = Offset(center.x + hw, center.y - elev),
-            strokeWidth = 1.4f
-        )
-    }
-
-    // Clean Contour Outline
-    drawPath(path = topPath, color = outlineColor, style = Stroke(width = 1.0f))
-    drawPath(path = leftPath, color = outlineColor, style = Stroke(width = 1.0f))
-    drawPath(path = rightPath, color = outlineColor, style = Stroke(width = 1.0f))
-
-    if (glowColor != null) {
-        drawCircle(
-            color = glowColor,
-            radius = hw * 0.8f,
-            center = Offset(center.x, center.y - elev * 0.5f),
-            style = Stroke(width = 1.5f)
-        )
-    }
-}
-
+/**
+ * Renderiza um bloco 3D com texturização afim via setPolyToPoly nas 3 faces isométricas.
+ */
 private fun DrawScope.drawIsometricBlock(
     transform: IsometricTransform,
     block: BlockState,
@@ -288,182 +341,11 @@ private fun DrawScope.drawIsometricBlock(
     zoom: Float
 ) {
     if (isGhost) {
-        drawGhostCube(center, hw, hh, elev, alpha)
+        drawGhostBlock(center, hw, hh, elev, alpha)
         return
     }
 
     when (block.type) {
-        BlockType.SMOOTH_STONE -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF6B7280).copy(alpha = alpha),
-                leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-                rightColor = Color(0xFF374151).copy(alpha = alpha),
-                bevelColor = Color(0xFF9CA3AF).copy(alpha = alpha * 0.7f)
-            )
-            // Pixel flecks
-            drawCircle(
-                color = Color(0xFF374151).copy(alpha = alpha * 0.8f),
-                radius = 1.8f,
-                center = Offset(center.x - hw * 0.2f, center.y - elev)
-            )
-            drawCircle(
-                color = Color(0xFF9CA3AF).copy(alpha = alpha * 0.8f),
-                radius = 1.8f,
-                center = Offset(center.x + hw * 0.25f, center.y - elev - hh * 0.2f)
-            )
-        }
-
-        BlockType.IRON_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFFE2E8F0).copy(alpha = alpha),
-                leftColor = Color(0xFFCBD5E1).copy(alpha = alpha),
-                rightColor = Color(0xFF94A3B8).copy(alpha = alpha),
-                bevelColor = Color(0xFFF8FAFC).copy(alpha = alpha)
-            )
-            // Iron plate rivets
-            val rivetColor = Color(0xFF64748B).copy(alpha = alpha)
-            drawCircle(color = rivetColor, radius = 1.8f, center = Offset(center.x - hw * 0.45f, center.y - elev))
-            drawCircle(color = rivetColor, radius = 1.8f, center = Offset(center.x + hw * 0.45f, center.y - elev))
-            drawCircle(color = rivetColor, radius = 1.8f, center = Offset(center.x, center.y - hh * 0.6f - elev))
-            drawCircle(color = rivetColor, radius = 1.8f, center = Offset(center.x, center.y + hh * 0.6f - elev))
-        }
-
-        BlockType.RED_WOOL -> drawVoxelCube(
-            center, hw, hh, elev,
-            topColor = Color(0xFFDC2626).copy(alpha = alpha),
-            leftColor = Color(0xFFB91C1C).copy(alpha = alpha),
-            rightColor = Color(0xFF991B1B).copy(alpha = alpha),
-            bevelColor = Color(0xFFEF4444).copy(alpha = alpha)
-        )
-
-        BlockType.BLUE_WOOL -> drawVoxelCube(
-            center, hw, hh, elev,
-            topColor = Color(0xFF2563EB).copy(alpha = alpha),
-            leftColor = Color(0xFF1D4ED8).copy(alpha = alpha),
-            rightColor = Color(0xFF1E40AF).copy(alpha = alpha),
-            bevelColor = Color(0xFF60A5FA).copy(alpha = alpha)
-        )
-
-        BlockType.GREEN_WOOL -> drawVoxelCube(
-            center, hw, hh, elev,
-            topColor = Color(0xFF16A34A).copy(alpha = alpha),
-            leftColor = Color(0xFF15803D).copy(alpha = alpha),
-            rightColor = Color(0xFF166534).copy(alpha = alpha),
-            bevelColor = Color(0xFF4ADE80).copy(alpha = alpha)
-        )
-
-        BlockType.YELLOW_WOOL -> drawVoxelCube(
-            center, hw, hh, elev,
-            topColor = Color(0xFFEAB308).copy(alpha = alpha),
-            leftColor = Color(0xFFCA8A04).copy(alpha = alpha),
-            rightColor = Color(0xFFA16207).copy(alpha = alpha),
-            bevelColor = Color(0xFFFDE047).copy(alpha = alpha)
-        )
-
-        BlockType.GLASS -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0x5538BDF8).copy(alpha = alpha * 0.35f),
-                leftColor = Color(0x550284C7).copy(alpha = alpha * 0.25f),
-                rightColor = Color(0x550369A1).copy(alpha = alpha * 0.25f),
-                bevelColor = Color(0x88FFFFFF).copy(alpha = alpha * 0.6f)
-            )
-            // Cyber specular reflection streak
-            drawLine(
-                color = Color(0x99FFFFFF).copy(alpha = alpha * 0.7f),
-                start = Offset(center.x - hw * 0.3f, center.y - elev - hh * 0.2f),
-                end = Offset(center.x + hw * 0.1f, center.y - elev + hh * 0.4f),
-                strokeWidth = 1.5f
-            )
-        }
-
-        BlockType.STONE_SLAB -> {
-            val halfElev = elev * 0.5f
-            drawVoxelCube(
-                center, hw, hh, halfElev,
-                topColor = Color(0xFF6B7280).copy(alpha = alpha),
-                leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-                rightColor = Color(0xFF374151).copy(alpha = alpha),
-                bevelColor = Color(0xFF9CA3AF).copy(alpha = alpha * 0.7f)
-            )
-        }
-
-        BlockType.SLIME_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xAA4ADE80).copy(alpha = alpha * 0.75f),
-                leftColor = Color(0xAA22C55E).copy(alpha = alpha * 0.75f),
-                rightColor = Color(0xAA16A34A).copy(alpha = alpha * 0.75f),
-                bevelColor = Color(0xCC86EFAC).copy(alpha = alpha * 0.8f)
-            )
-            // Inner floating slime nucleus
-            drawVoxelCube(
-                center = Offset(center.x, center.y - elev * 0.2f),
-                hw = hw * 0.45f,
-                hh = hh * 0.45f,
-                elev = elev * 0.45f,
-                topColor = Color(0xFF15803D).copy(alpha = alpha * 0.85f),
-                leftColor = Color(0xFF166534).copy(alpha = alpha * 0.85f),
-                rightColor = Color(0xFF14532D).copy(alpha = alpha * 0.85f)
-            )
-        }
-
-        BlockType.HONEY_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xAAF59E0B).copy(alpha = alpha * 0.75f),
-                leftColor = Color(0xAAD97706).copy(alpha = alpha * 0.75f),
-                rightColor = Color(0xABB45309).copy(alpha = alpha * 0.75f),
-                bevelColor = Color(0xCCFDE68A).copy(alpha = alpha * 0.8f)
-            )
-        }
-
-        BlockType.OBSIDIAN -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF1E1035).copy(alpha = alpha),
-                leftColor = Color(0xFF150B25).copy(alpha = alpha),
-                rightColor = Color(0xFF0C0617).copy(alpha = alpha),
-                bevelColor = Color(0x66A855F7).copy(alpha = alpha),
-                glowColor = Color(0x559333EA).copy(alpha = alpha)
-            )
-            // Glowing purple crystal flecks
-            val fleckColor = Color(0xFFC084FC).copy(alpha = alpha)
-            drawCircle(color = fleckColor, radius = 2.0f, center = Offset(center.x - hw * 0.2f, center.y - elev - hh * 0.2f))
-            drawCircle(color = Color(0xFFF472B6).copy(alpha = alpha), radius = 1.8f, center = Offset(center.x + hw * 0.25f, center.y - elev + hh * 0.15f))
-        }
-
-        BlockType.REDSTONE_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = RedstoneFull.copy(alpha = alpha),
-                leftColor = RedstoneMid.copy(alpha = alpha),
-                rightColor = RedstoneDim.copy(alpha = alpha),
-                bevelColor = Color(0xFFFF8595).copy(alpha = alpha),
-                glowColor = NeonCyan.copy(alpha = 0.45f * alpha)
-            )
-            // Glowing pixel crystals
-            val crystalColor = Color(0xFFFFF1F2).copy(alpha = alpha)
-            drawCircle(color = crystalColor, radius = 2.0f, center = Offset(center.x, center.y - elev))
-            drawCircle(color = Color(0xFFFFBAC2).copy(alpha = alpha), radius = 1.8f, center = Offset(center.x - hw * 0.3f, center.y - elev + hh * 0.2f))
-            drawCircle(color = Color(0xFFFFBAC2).copy(alpha = alpha), radius = 1.8f, center = Offset(center.x + hw * 0.3f, center.y - elev - hh * 0.2f))
-        }
-
-        BlockType.TARGET_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFFF8FAFC).copy(alpha = alpha),
-                leftColor = Color(0xFFDC2626).copy(alpha = alpha),
-                rightColor = Color(0xFF991B1B).copy(alpha = alpha),
-                bevelColor = Color(0xFFFFFFFF).copy(alpha = alpha)
-            )
-            // Red concentric bullseye rings on top face
-            drawCircle(color = Color(0xFFDC2626).copy(alpha = alpha), radius = hw * 0.45f, center = Offset(center.x, center.y - elev), style = Stroke(width = 2.5f))
-            drawCircle(color = Color(0xFFDC2626).copy(alpha = alpha), radius = hw * 0.18f, center = Offset(center.x, center.y - elev))
-        }
-
         BlockType.REDSTONE_WIRE -> {
             drawRedstoneWire(
                 transform = transform,
@@ -477,6 +359,10 @@ private fun DrawScope.drawIsometricBlock(
                 panOffset = panOffset,
                 zoom = zoom
             )
+        }
+
+        BlockType.REDSTONE_TORCH -> {
+            drawRedstoneTorch(block, center, elev, alpha)
         }
 
         BlockType.REDSTONE_REPEATER -> {
@@ -507,268 +393,164 @@ private fun DrawScope.drawIsometricBlock(
             )
         }
 
-        BlockType.REDSTONE_TORCH -> {
-            drawRedstoneTorch(
-                block = block,
-                center = center,
-                elev = elev,
-                alpha = alpha
-            )
-        }
-
         BlockType.LEVER -> {
-            drawLever(
-                block = block,
-                center = center,
-                hw = hw,
-                hh = hh,
-                elev = elev,
-                alpha = alpha
-            )
+            drawLever(block, center, hw, hh, elev, alpha)
         }
 
         BlockType.STONE_BUTTON -> {
-            drawButton(
-                block = block,
-                center = center,
-                hw = hw,
-                hh = hh,
-                alpha = alpha
-            )
+            drawButton(block, center, hw, hh, alpha)
         }
 
         BlockType.STONE_PRESSURE_PLATE -> {
-            drawPressurePlate(
+            drawPressurePlate(center, hw, hh, elev, alpha, block.isActive)
+        }
+
+        BlockType.STONE_SLAB -> {
+            val slabElev = elev * 0.5f
+            val topKey = VoxelTextureAtlas.getBlockTopKey(block.type, block.isActive, block.power)
+            val sideKey = VoxelTextureAtlas.getBlockSideKey(block.type, block.isActive, block.power)
+            drawTexturedVoxelCube(center, hw, hh, slabElev, alpha, topKey, sideKey)
+        }
+
+        BlockType.AIR -> {}
+
+        else -> {
+            // Cubos sólidos texturizados (Ferro, Pedra, Lã, Vidro, Obsidiana, Redstone, Slime, Mel, TNT, Alvo, Lâmpada, Pistão, Observador, etc.)
+            val topKey = VoxelTextureAtlas.getBlockTopKey(block.type, block.isActive, block.power)
+            val sideKey = VoxelTextureAtlas.getBlockSideKey(block.type, block.isActive, block.power)
+            val cubeElev = if (block.type == BlockType.PISTON && block.isExtended) elev * 1.35f else elev
+
+            drawTexturedVoxelCube(
                 center = center,
                 hw = hw,
                 hh = hh,
-                elev = elev,
+                elev = cubeElev,
                 alpha = alpha,
-                isActive = block.isActive
-            )
-        }
-
-        BlockType.DAYLIGHT_DETECTOR -> {
-            val slabElev = elev * 0.35f
-            drawVoxelCube(
-                center, hw, hh, slabElev,
-                topColor = Color(0xFF92400E).copy(alpha = alpha),
-                leftColor = Color(0xFF78350F).copy(alpha = alpha),
-                rightColor = Color(0xFF451A03).copy(alpha = alpha),
-                bevelColor = Color(0xFFB45309).copy(alpha = alpha),
-                glowColor = if (block.isActive) Color(0xFFFFB300) else null
-            )
-            // Solar cell grid
-            drawLine(
-                color = if (block.isActive) NeonCyan else Color(0xFF1E293B),
-                start = Offset(center.x - hw * 0.4f, center.y - slabElev),
-                end = Offset(center.x + hw * 0.4f, center.y - slabElev),
-                strokeWidth = 2.0f
-            )
-        }
-
-        BlockType.SCULK_SENSOR -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF06283D).copy(alpha = alpha),
-                leftColor = Color(0xFF041C2B).copy(alpha = alpha),
-                rightColor = Color(0xFF021019).copy(alpha = alpha),
-                bevelColor = Color(0xFF1363DF).copy(alpha = alpha),
-                glowColor = if (block.isActive) NeonCyan else null
-            )
-            // Sculk tendrils
-            val tendrilColor = if (block.isActive) NeonCyan else Color(0xFF06B6D4)
-            drawCircle(color = tendrilColor, radius = 2.5f, center = Offset(center.x - 5f, center.y - elev - 4f))
-            drawCircle(color = tendrilColor, radius = 2.5f, center = Offset(center.x + 5f, center.y - elev - 4f))
-        }
-
-        BlockType.REDSTONE_LAMP -> {
-            val isLit = block.isActive || block.power > 0
-            if (isLit) {
-                drawVoxelCube(
-                    center, hw, hh, elev,
-                    topColor = Color(0xFFFFCA28).copy(alpha = alpha),
-                    leftColor = Color(0xFFFFA000).copy(alpha = alpha),
-                    rightColor = Color(0xFFFF8F00).copy(alpha = alpha),
-                    bevelColor = Color(0xFFFFF9C4).copy(alpha = alpha),
-                    glowColor = Color(0xFFFFD54F)
-                )
-                // Internal radiant lattice
-                drawCircle(color = Color(0xFFFFFFFF).copy(alpha = alpha), radius = hw * 0.3f, center = Offset(center.x, center.y - elev))
-            } else {
-                drawVoxelCube(
-                    center, hw, hh, elev,
-                    topColor = Color(0xFF3E2723).copy(alpha = alpha),
-                    leftColor = Color(0xFF271510).copy(alpha = alpha),
-                    rightColor = Color(0xFF1A0E0B).copy(alpha = alpha),
-                    bevelColor = Color(0xFF5D4037).copy(alpha = alpha)
-                )
-            }
-        }
-
-        BlockType.COPPER_BULB -> {
-            val isLit = block.isActive
-            if (isLit) {
-                drawVoxelCube(
-                    center, hw, hh, elev,
-                    topColor = Color(0xFF0F766E).copy(alpha = alpha),
-                    leftColor = Color(0xFF115E59).copy(alpha = alpha),
-                    rightColor = Color(0xFF134E4A).copy(alpha = alpha),
-                    bevelColor = Color(0xFF2DD4BF).copy(alpha = alpha),
-                    glowColor = Color(0xFFFF9800)
-                )
-                // Glowing orange-amber filament inside oxidized frame
-                drawCircle(color = Color(0xFFFFB74D).copy(alpha = alpha), radius = hw * 0.32f, center = Offset(center.x, center.y - elev))
-                drawCircle(color = Color(0xFFFFFFFF).copy(alpha = alpha), radius = hw * 0.15f, center = Offset(center.x, center.y - elev))
-            } else {
-                drawVoxelCube(
-                    center, hw, hh, elev,
-                    topColor = Color(0xFF14532D).copy(alpha = alpha),
-                    leftColor = Color(0xFF0F3E22).copy(alpha = alpha),
-                    rightColor = Color(0xFF0B2D19).copy(alpha = alpha),
-                    bevelColor = Color(0xFF16A34A).copy(alpha = alpha)
-                )
-                drawCircle(color = Color(0xFF1F2937).copy(alpha = alpha), radius = hw * 0.22f, center = Offset(center.x, center.y - elev))
-            }
-        }
-
-        BlockType.PISTON, BlockType.STICKY_PISTON -> {
-            val isSticky = block.type == BlockType.STICKY_PISTON
-            val headElev = if (block.isExtended) elev * 1.35f else elev
-
-            drawVoxelCube(
-                center, hw, hh, headElev,
-                topColor = if (isSticky) StickySlime.copy(alpha = alpha) else PistonHead.copy(alpha = alpha),
-                leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-                rightColor = Color(0xFF374151).copy(alpha = alpha),
-                bevelColor = if (isSticky) Color(0xFF86EFAC).copy(alpha = alpha) else Color(0xFFA17448).copy(alpha = alpha)
+                topKey = topKey,
+                sideKey = sideKey
             )
 
-            if (block.isExtended) {
+            // Extensão do pistão
+            if ((block.type == BlockType.PISTON || block.type == BlockType.STICKY_PISTON) && block.isExtended) {
                 drawLine(
                     color = WoodBrown.copy(alpha = alpha),
                     start = Offset(center.x, center.y),
-                    end = Offset(center.x, center.y - headElev * 0.6f),
+                    end = Offset(center.x, center.y - cubeElev * 0.5f),
                     strokeWidth = 6.0f
                 )
             }
         }
-
-        BlockType.OBSERVER -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF374151).copy(alpha = alpha),
-                leftColor = Color(0xFF1F2937).copy(alpha = alpha),
-                rightColor = Color(0xFF111827).copy(alpha = alpha),
-                bevelColor = Color(0xFF4B5563).copy(alpha = alpha)
-            )
-            // Sensor pulse eye
-            val isPulsing = block.pulseTicksLeft > 0
-            val eyeColor = if (isPulsing) RedstoneFull.copy(alpha = alpha) else ObserverEye.copy(alpha = alpha)
-            drawCircle(color = eyeColor, radius = 4.2f, center = Offset(center.x, center.y - elev * 0.6f))
-            if (isPulsing) {
-                drawCircle(color = RedstoneGlow.copy(alpha = 0.6f * alpha), radius = 9.0f, center = Offset(center.x, center.y - elev * 0.6f))
-            }
-        }
-
-        BlockType.NOTE_BLOCK -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF78350F).copy(alpha = alpha),
-                leftColor = Color(0xFF5A270B).copy(alpha = alpha),
-                rightColor = Color(0xFF3B1A07).copy(alpha = alpha),
-                bevelColor = Color(0xFF92400E).copy(alpha = alpha),
-                glowColor = if (block.isActive) NeonCyan else null
-            )
-            // Musical note pixel etch
-            drawCircle(color = Color(0xFFFDE68A).copy(alpha = alpha), radius = 2.5f, center = Offset(center.x - 3f, center.y - elev + 2f))
-            drawLine(
-                color = Color(0xFFFDE68A).copy(alpha = alpha),
-                start = Offset(center.x - 1f, center.y - elev + 2f),
-                end = Offset(center.x - 1f, center.y - elev - 4f),
-                strokeWidth = 1.8f
-            )
-        }
-
-        BlockType.DISPENSER, BlockType.DROPPER -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFF6B7280).copy(alpha = alpha),
-                leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-                rightColor = Color(0xFF374151).copy(alpha = alpha),
-                bevelColor = Color(0xFF9CA3AF).copy(alpha = alpha)
-            )
-            // Mouth opening
-            drawCircle(
-                color = Color(0xFF111827).copy(alpha = alpha),
-                radius = 3.5f,
-                center = Offset(center.x, center.y - elev * 0.5f)
-            )
-        }
-
-        BlockType.HOPPER -> {
-            drawVoxelCube(
-                center, hw * 0.85f, hh * 0.85f, elev * 0.7f,
-                topColor = Color(0xFF374151).copy(alpha = alpha),
-                leftColor = Color(0xFF1F2937).copy(alpha = alpha),
-                rightColor = Color(0xFF111827).copy(alpha = alpha),
-                bevelColor = Color(0xFF4B5563).copy(alpha = alpha)
-            )
-        }
-
-        BlockType.IRON_DOOR, BlockType.IRON_TRAPDOOR -> {
-            val plateElev = if (block.isActive) elev * 0.2f else elev * 0.8f
-            drawVoxelCube(
-                center, hw * 0.88f, hh * 0.88f, plateElev,
-                topColor = Color(0xFFE2E8F0).copy(alpha = alpha),
-                leftColor = Color(0xFFCBD5E1).copy(alpha = alpha),
-                rightColor = Color(0xFF94A3B8).copy(alpha = alpha),
-                bevelColor = Color(0xFFFFFFFF).copy(alpha = alpha)
-            )
-        }
-
-        BlockType.BELL -> {
-            drawVoxelCube(
-                center, hw * 0.65f, hh * 0.65f, elev * 0.65f,
-                topColor = Color(0xFFFACC15).copy(alpha = alpha),
-                leftColor = Color(0xFFEAB308).copy(alpha = alpha),
-                rightColor = Color(0xFFCA8A04).copy(alpha = alpha),
-                bevelColor = Color(0xFFFEF08A).copy(alpha = alpha),
-                glowColor = if (block.isActive) Color(0xFFFACC15) else null
-            )
-        }
-
-        BlockType.TNT -> {
-            drawVoxelCube(
-                center, hw, hh, elev,
-                topColor = Color(0xFFDC2626).copy(alpha = alpha),
-                leftColor = Color(0xFFB91C1C).copy(alpha = alpha),
-                rightColor = Color(0xFF991B1B).copy(alpha = alpha),
-                bevelColor = Color(0xFFEF4444).copy(alpha = alpha),
-                glowColor = if (block.isActive) Color.White else null
-            )
-            // TNT central white band
-            drawLine(
-                color = Color.White.copy(alpha = alpha),
-                start = Offset(center.x - hw, center.y - elev * 0.5f),
-                end = Offset(center.x + hw, center.y - elev * 0.5f),
-                strokeWidth = 3.5f
-            )
-        }
-
-        BlockType.AIR -> {}
     }
 }
 
-private fun DrawScope.drawGhostCube(
+private fun DrawScope.drawTexturedVoxelCube(
+    center: Offset,
+    hw: Float,
+    hh: Float,
+    elev: Float,
+    alpha: Float,
+    topKey: String,
+    sideKey: String
+) {
+    val topBmp = VoxelTextureAtlas.getTexture(topKey)
+    val sideBmp = VoxelTextureAtlas.getTexture(sideKey)
+
+    if (topBmp != null && sideBmp != null) {
+        val paintTop = Paint(baseTopPaint).apply { this.alpha = (alpha * 255).toInt() }
+        val paintLeft = Paint(baseLeftPaint).apply { this.alpha = (alpha * 255).toInt() }
+        val paintRight = Paint(baseRightPaint).apply { this.alpha = (alpha * 255).toInt() }
+
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+
+            // Top Face (100% Brightness)
+            dstPoly[0] = center.x
+            dstPoly[1] = center.y - hh - elev
+            dstPoly[2] = center.x + hw
+            dstPoly[3] = center.y - elev
+            dstPoly[4] = center.x
+            dstPoly[5] = center.y + hh - elev
+            dstPoly[6] = center.x - hw
+            dstPoly[7] = center.y - elev
+            tempMatrix.setPolyToPoly(srcPoly, 0, dstPoly, 0, 4)
+            native.drawBitmap(topBmp, tempMatrix, paintTop)
+
+            // Left Face (78% Brightness)
+            dstPoly[0] = center.x - hw
+            dstPoly[1] = center.y - elev
+            dstPoly[2] = center.x
+            dstPoly[3] = center.y + hh - elev
+            dstPoly[4] = center.x
+            dstPoly[5] = center.y + hh
+            dstPoly[6] = center.x - hw
+            dstPoly[7] = center.y
+            tempMatrix.setPolyToPoly(srcPoly, 0, dstPoly, 0, 4)
+            native.drawBitmap(sideBmp, tempMatrix, paintLeft)
+
+            // Right Face (58% Brightness)
+            dstPoly[0] = center.x
+            dstPoly[1] = center.y + hh - elev
+            dstPoly[2] = center.x + hw
+            dstPoly[3] = center.y - elev
+            dstPoly[4] = center.x + hw
+            dstPoly[5] = center.y
+            dstPoly[6] = center.x
+            dstPoly[7] = center.y + hh
+            tempMatrix.setPolyToPoly(srcPoly, 0, dstPoly, 0, 4)
+            native.drawBitmap(sideBmp, tempMatrix, paintRight)
+        }
+    } else {
+        // Fallback geométrico com sombreamento
+        drawFallbackCube(center, hw, hh, elev, alpha)
+    }
+}
+
+private fun DrawScope.drawFallbackCube(
     center: Offset,
     hw: Float,
     hh: Float,
     elev: Float,
     alpha: Float
 ) {
-    val ghostColor = Color(0x2200E5FF).copy(alpha = alpha * 0.25f)
-    val ghostBorder = Color(0x6600E5FF).copy(alpha = alpha * 0.45f)
+    val topPath = Path().apply {
+        moveTo(center.x, center.y - hh - elev)
+        lineTo(center.x + hw, center.y - elev)
+        lineTo(center.x, center.y + hh - elev)
+        lineTo(center.x - hw, center.y - elev)
+        close()
+    }
+    val leftPath = Path().apply {
+        moveTo(center.x - hw, center.y - elev)
+        lineTo(center.x, center.y + hh - elev)
+        lineTo(center.x, center.y + hh)
+        lineTo(center.x - hw, center.y)
+        close()
+    }
+    val rightPath = Path().apply {
+        moveTo(center.x, center.y + hh - elev)
+        lineTo(center.x + hw, center.y - elev)
+        lineTo(center.x + hw, center.y)
+        lineTo(center.x, center.y + hh)
+        close()
+    }
+
+    drawPath(topPath, color = Color(0xFF6B7280).copy(alpha = alpha), style = Fill)
+    drawPath(leftPath, color = Color(0xFF4B5563).copy(alpha = alpha), style = Fill)
+    drawPath(rightPath, color = Color(0xFF374151).copy(alpha = alpha), style = Fill)
+    drawPath(topPath, color = Color(0xFF1E2127), style = Stroke(width = 1.0f))
+    drawPath(leftPath, color = Color(0xFF1E2127), style = Stroke(width = 1.0f))
+    drawPath(rightPath, color = Color(0xFF1E2127), style = Stroke(width = 1.0f))
+}
+
+private fun DrawScope.drawGhostBlock(
+    center: Offset,
+    hw: Float,
+    hh: Float,
+    elev: Float,
+    alpha: Float
+) {
+    val ghostColor = Color(0x334B5563).copy(alpha = alpha * 0.4f)
+    val ghostBorder = Color(0x666B7280).copy(alpha = alpha * 0.6f)
 
     val topPath = Path().apply {
         moveTo(center.x, center.y - hh - elev)
@@ -799,7 +581,7 @@ private fun DrawScope.drawRedstoneWire(
         Color(
             red = 0.55f + 0.45f * fraction,
             green = 0.08f * fraction,
-            blue = 0.12f * fraction,
+            blue = 0.10f * fraction,
             alpha = alpha
         )
     } else {
@@ -825,12 +607,11 @@ private fun DrawScope.drawRedstoneWire(
     if (signal > 0) {
         drawCircle(
             color = RedstoneGlow.copy(alpha = 0.4f * (signal / 15f) * alpha),
-            radius = if (noConnections) 12f else 8.5f,
+            radius = if (noConnections) 11f else 8f,
             center = centerTop
         )
     }
 
-    // Connect wire branches using projected 3D coordinates so camera rotation rotates wire arms
     val bx = block.x.toFloat()
     val by = block.y.toFloat()
     val bz = block.z.toFloat()
@@ -852,15 +633,14 @@ private fun DrawScope.drawRedstoneWire(
         drawLine(color = wireColor, start = centerTop, end = p, strokeWidth = wireWidth)
     }
 
-    // Exibição do número da força de sinal (0 a 15)
     if (showSignalNumbers) {
         drawContext.canvas.nativeCanvas.apply {
-            val paint = android.graphics.Paint().apply {
+            val paint = Paint().apply {
                 color = if (signal > 0) android.graphics.Color.WHITE else android.graphics.Color.LTGRAY
                 textSize = 22f
                 isFakeBoldText = true
-                textAlign = android.graphics.Paint.Align.CENTER
-                setShadowLayer(3f, 0f, 0f, android.graphics.Color.BLACK)
+                textAlign = Paint.Align.CENTER
+                setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
             }
             drawText("$signal", centerTop.x, centerTop.y - 7f, paint)
         }
@@ -897,18 +677,13 @@ private fun DrawScope.drawRepeater(
     zoom: Float
 ) {
     val slabElev = elev * 0.35f
-    drawVoxelCube(
-        center, hw, hh, slabElev,
-        topColor = Color(0xFF6B7280).copy(alpha = alpha),
-        leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-        rightColor = Color(0xFF374151).copy(alpha = alpha),
-        bevelColor = Color(0xFF9CA3AF).copy(alpha = alpha)
-    )
+    val topKey = VoxelTextureAtlas.getBlockTopKey(block.type, block.isActive, block.power)
+    val sideKey = VoxelTextureAtlas.getBlockSideKey(block.type, block.isActive, block.power)
+    drawTexturedVoxelCube(center, hw, hh, slabElev, alpha, topKey, sideKey)
 
     val isLit = block.power > 0
-    val torchColor = if (isLit) RedstoneFull.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
+    val torchColor = if (isLit) RedstoneBright.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
 
-    // Torches positioned in 3D grid space relative to block facing
     val bx = block.x.toFloat()
     val by = block.y.toFloat()
     val bz = block.z.toFloat()
@@ -932,7 +707,6 @@ private fun DrawScope.drawRepeater(
         zoom
     )
 
-    // Draw repeater torches
     drawCircle(color = torchColor, radius = 3.6f, center = frontPos)
     drawCircle(color = torchColor, radius = 3.6f, center = rearPos)
 
@@ -963,16 +737,12 @@ private fun DrawScope.drawComparator(
     zoom: Float
 ) {
     val slabElev = elev * 0.35f
-    drawVoxelCube(
-        center, hw, hh, slabElev,
-        topColor = Color(0xFF6B7280).copy(alpha = alpha),
-        leftColor = Color(0xFF4B5563).copy(alpha = alpha),
-        rightColor = Color(0xFF374151).copy(alpha = alpha),
-        bevelColor = Color(0xFF9CA3AF).copy(alpha = alpha)
-    )
+    val topKey = VoxelTextureAtlas.getBlockTopKey(block.type, block.isActive, block.power)
+    val sideKey = VoxelTextureAtlas.getBlockSideKey(block.type, block.isActive, block.power)
+    drawTexturedVoxelCube(center, hw, hh, slabElev, alpha, topKey, sideKey)
 
     val isLit = block.power > 0
-    val sideColor = if (isLit) RedstoneFull.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
+    val sideColor = if (isLit) RedstoneBright.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
 
     val bx = block.x.toFloat()
     val by = block.y.toFloat()
@@ -1008,7 +778,7 @@ private fun DrawScope.drawComparator(
     drawCircle(color = sideColor, radius = 3.2f, center = rearLeftPos)
     drawCircle(color = sideColor, radius = 3.2f, center = rearRightPos)
 
-    val frontTorchColor = if (block.isSubtractMode) RedstoneFull.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
+    val frontTorchColor = if (block.isSubtractMode) RedstoneBright.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
     drawCircle(color = frontTorchColor, radius = 3.6f, center = frontPos)
     if (block.isSubtractMode) {
         drawCircle(color = RedstoneGlow.copy(alpha = 0.5f * alpha), radius = 8.0f, center = frontPos)
@@ -1025,7 +795,7 @@ private fun DrawScope.drawRedstoneTorch(
     val torchTop = Offset(center.x, center.y - elev * 0.85f)
 
     drawLine(color = WoodBrown.copy(alpha = alpha), start = stalkBase, end = torchTop, strokeWidth = 3.8f)
-    val headColor = if (block.isActive) RedstoneFull.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
+    val headColor = if (block.isActive) RedstoneBright.copy(alpha = alpha) else RedstoneOff.copy(alpha = alpha)
     drawCircle(color = headColor, radius = 5.2f, center = torchTop)
     if (block.isActive) {
         drawCircle(color = Color(0xFFFF8595).copy(alpha = alpha), radius = 2.5f, center = torchTop)
@@ -1048,7 +818,7 @@ private fun DrawScope.drawLever(
         lineTo(center.x - hw * 0.4f, center.y)
         close()
     }
-    drawPath(path = mountPath, color = Color(0xFF6B7280).copy(alpha = alpha), style = Fill)
+    drawPath(path = mountPath, color = Color(0xFF4B5563).copy(alpha = alpha), style = Fill)
 
     val angleX = if (block.isActive) 8f else -8f
     drawLine(
@@ -1058,7 +828,7 @@ private fun DrawScope.drawLever(
         strokeWidth = 3.8f
     )
     drawCircle(
-        color = if (block.isActive) RedstoneFull.copy(alpha = alpha) else Color(0xFF374151).copy(alpha = alpha),
+        color = if (block.isActive) RedstoneBright.copy(alpha = alpha) else Color(0xFF374151).copy(alpha = alpha),
         radius = 3.8f,
         center = Offset(center.x + angleX, center.y - elev * 0.75f)
     )
@@ -1079,9 +849,9 @@ private fun DrawScope.drawButton(
         lineTo(center.x - hw * buttonSize, center.y)
         close()
     }
-    val buttonColor = if (block.pulseTicksLeft > 0) NeonCyan.copy(alpha = alpha) else Color(0xFF9CA3AF).copy(alpha = alpha)
+    val buttonColor = if (block.pulseTicksLeft > 0) RedstoneBright.copy(alpha = alpha) else Color(0xFF6B7280).copy(alpha = alpha)
     drawPath(path = buttonPath, color = buttonColor, style = Fill)
-    drawPath(path = buttonPath, color = MatteBorder, style = Stroke(width = 1.0f))
+    drawPath(path = buttonPath, color = Color(0xFF374151), style = Stroke(width = 1.0f))
 }
 
 private fun DrawScope.drawPressurePlate(
@@ -1094,11 +864,44 @@ private fun DrawScope.drawPressurePlate(
 ) {
     val plateSize = 0.75f
     val plateElev = elev * 0.15f
-    drawVoxelCube(
-        center, hw * plateSize, hh * plateSize, plateElev,
-        topColor = if (isActive) NeonCyan.copy(alpha = alpha) else Color(0xFF9CA3AF).copy(alpha = alpha),
-        leftColor = Color(0xFF6B7280).copy(alpha = alpha),
-        rightColor = Color(0xFF4B5563).copy(alpha = alpha),
-        bevelColor = Color(0xFFCBD5E1).copy(alpha = alpha)
-    )
+    val topKey = "SMOOTH_STONE"
+    drawTexturedVoxelCube(center, hw * plateSize, hh * plateSize, plateElev, alpha, topKey, topKey)
+}
+
+/**
+ * Ícone Voxel 3D para exibir na paleta de blocos inferior.
+ */
+@Composable
+fun BlockVoxelPreview(
+    type: BlockType,
+    modifier: Modifier = Modifier,
+    size: Dp = 32.dp
+) {
+    Canvas(modifier = modifier.size(size)) {
+        val hw = this.size.width * 0.38f
+        val hh = this.size.height * 0.20f
+        val elev = this.size.height * 0.28f
+        val center = Offset(this.size.width / 2f, this.size.height * 0.65f)
+
+        when (type) {
+            BlockType.REDSTONE_WIRE -> {
+                drawCircle(color = RedstoneBright, radius = hw * 0.45f, center = center)
+                drawCircle(color = RedstoneGlow.copy(alpha = 0.5f), radius = hw * 0.7f, center = center)
+            }
+            BlockType.REDSTONE_TORCH -> {
+                drawLine(
+                    color = WoodBrown,
+                    start = Offset(center.x, center.y),
+                    end = Offset(center.x, center.y - elev * 0.9f),
+                    strokeWidth = 3f
+                )
+                drawCircle(color = RedstoneBright, radius = 5f, center = Offset(center.x, center.y - elev * 0.9f))
+            }
+            else -> {
+                val topKey = VoxelTextureAtlas.getBlockTopKey(type, isActive = true, power = 15)
+                val sideKey = VoxelTextureAtlas.getBlockSideKey(type, isActive = true, power = 15)
+                drawTexturedVoxelCube(center, hw, hh, elev, 1.0f, topKey, sideKey)
+            }
+        }
+    }
 }

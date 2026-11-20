@@ -4,65 +4,67 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Ambient Redstone Bloom Aura -->
+    <!-- Redstone Dust Ambient Bloom -->
     <path
-        android:fillColor="#33FF2434"
-        android:pathData="M54,26 A28,28 0 1,0 54,82 A28,28 0 1,0 54,26 Z" />
+        android:fillColor="#33FF2A2A"
+        android:pathData="M54,28 A26,26 0 1,0 54,80 A26,26 0 1,0 54,28 Z" />
 
-    <!-- 3D Voxel Redstone Block: Left Face (Ambient Side) -->
+    <!-- Redstone Dust Pile Base - Dark Red #7A0B0B -->
     <path
-        android:fillColor="#D61A28"
-        android:pathData="M32,44 L54,56 L54,80 L32,68 Z" />
+        android:fillColor="#7A0B0B"
+        android:pathData="M38,68 h32 v8 h-32 z" />
+    <path
+        android:fillColor="#7A0B0B"
+        android:pathData="M42,62 h24 v10 h-24 z" />
+    <path
+        android:fillColor="#7A0B0B"
+        android:pathData="M46,54 h16 v12 h-16 z" />
 
-    <!-- 3D Voxel Redstone Block: Right Face (Shadow Side) -->
+    <!-- Redstone Dust Pile Mid - Mid Red #C61A1A -->
     <path
-        android:fillColor="#7A151C"
-        android:pathData="M54,56 L76,44 L76,68 L54,80 Z" />
+        android:fillColor="#C61A1A"
+        android:pathData="M40,64 h28 v6 h-28 z" />
+    <path
+        android:fillColor="#C61A1A"
+        android:pathData="M44,56 h20 v8 h-20 z" />
+    <path
+        android:fillColor="#C61A1A"
+        android:pathData="M48,48 h12 v10 h-12 z" />
+    <path
+        android:fillColor="#C61A1A"
+        android:pathData="M52,42 h4 v8 h-4 z" />
 
-    <!-- 3D Voxel Redstone Block: Top Face (Highlight Side) -->
+    <!-- Redstone Dust Pile Core - Vibrant Red #FF2A2A -->
     <path
-        android:fillColor="#FF2434"
-        android:pathData="M54,32 L76,44 L54,56 L32,44 Z" />
+        android:fillColor="#FF2A2A"
+        android:pathData="M42,62 h6 v4 h-6 z" />
+    <path
+        android:fillColor="#FF2A2A"
+        android:pathData="M52,62 h8 v4 h-8 z" />
+    <path
+        android:fillColor="#FF2A2A"
+        android:pathData="M64,62 h4 v4 h-4 z" />
+    <path
+        android:fillColor="#FF2A2A"
+        android:pathData="M46,54 h4 v4 h-4 z" />
+    <path
+        android:fillColor="#FF2A2A"
+        android:pathData="M54,52 h6 v6 h-6 z" />
+    <path
+        android:fillColor="#FF2A2A"
+        android:pathData="M50,44 h8 v6 h-8 z" />
 
-    <!-- Top Bevel Highlight Edge -->
+    <!-- Spark Highlights #FF8A80 & White Core -->
     <path
-        android:strokeColor="#FFFF8595"
-        android:strokeWidth="1.5"
-        android:pathData="M32,44 L54,32 L76,44" />
-
-    <!-- Crisp Block Outline -->
+        android:fillColor="#FF8A80"
+        android:pathData="M53,36 h3 v4 h-3 z" />
     <path
-        android:strokeColor="#22000000"
-        android:strokeWidth="1.2"
-        android:pathData="M54,32 L76,44 L76,68 L54,80 L32,68 L32,44 Z" />
+        android:fillColor="#FF8A80"
+        android:pathData="M47,50 h3 v3 h-3 z" />
     <path
-        android:strokeColor="#22000000"
-        android:strokeWidth="1.0"
-        android:pathData="M54,56 L54,80" />
-    <path
-        android:strokeColor="#22000000"
-        android:strokeWidth="1.0"
-        android:pathData="M32,44 L54,56 L76,44" />
-
-    <!-- Redstone Crystal Cluster Flecks -->
+        android:fillColor="#FF8A80"
+        android:pathData="M58,58 h3 v3 h-3 z" />
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M52,42 h4 v4 h-4 z" />
-    <path
-        android:fillColor="#FFFFBAC2"
-        android:pathData="M43,46 h3 v3 h-3 z" />
-    <path
-        android:fillColor="#FFFFBAC2"
-        android:pathData="M62,40 h3 v3 h-3 z" />
-    <path
-        android:fillColor="#FFFF8595"
-        android:pathData="M41,56 h3 v3 h-3 z" />
-    <path
-        android:fillColor="#FFFF8595"
-        android:pathData="M64,56 h3 v3 h-3 z" />
-
-    <!-- Cyan Pulse Logic Spark at Crown -->
-    <path
-        android:fillColor="#00E5FF"
-        android:pathData="M54,23 L56,27 L60,27 L57,30 L58,34 L54,31 L50,34 L51,30 L48,27 L52,27 Z" />
+        android:pathData="M52,48 h4 v4 h-4 z" />
 </vector>

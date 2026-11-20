@@ -1,6 +1,7 @@
 package com.redstonelab.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -41,15 +42,15 @@ fun CircuitInspectorPanel(
         modifier = modifier
             .width(260.dp)
             .padding(4.dp),
-        shape = RoundedCornerShape(16.dp),
-        backgroundColor = MatteSurfaceElevated,
-        borderColor = MatteBorder,
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = SurfaceBar,
+        borderColor = BorderSubtle,
         borderWidth = 1.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp)
+                .padding(12.dp)
         ) {
             // Header
             Row(
@@ -59,7 +60,7 @@ fun CircuitInspectorPanel(
             ) {
                 Text(
                     text = "INSPETOR",
-                    color = NeonCyan,
+                    color = TextWhite,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
@@ -70,12 +71,12 @@ fun CircuitInspectorPanel(
                     CyberBadge(
                         label = "CAM",
                         value = cameraOrientationLabel,
-                        accentColor = NeonCyan
+                        accentColor = RedstoneAccent
                     )
                     CyberBadge(
                         label = "POS",
                         value = "${selectedCoord.x}, ${selectedCoord.y}, ${selectedCoord.z}",
-                        accentColor = ElectricBlue
+                        accentColor = TextWhite
                     )
                 }
             }
@@ -83,10 +84,9 @@ fun CircuitInspectorPanel(
             Spacer(modifier = Modifier.height(6.dp))
 
             if (blockState != null) {
-                // Nome do Bloco
                 Text(
                     text = blockState.type.displayName.uppercase(),
-                    color = TextPrimary,
+                    color = TextWhite,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
@@ -94,7 +94,6 @@ fun CircuitInspectorPanel(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Força do Sinal (0 a 15)
                 val powerRatio = blockState.power / 15f
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -109,7 +108,7 @@ fun CircuitInspectorPanel(
                     )
                     Text(
                         text = "${blockState.power} / 15",
-                        color = if (blockState.power > 0) RedstoneFull else TextMuted,
+                        color = if (blockState.power > 0) RedstoneBright else TextMuted,
                         fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
@@ -123,14 +122,13 @@ fun CircuitInspectorPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(4.dp)
-                        .clip(RoundedCornerShape(50)),
-                    color = if (blockState.power > 0) RedstoneFull else RedstoneOff,
-                    trackColor = MatteBackground
+                        .clip(CircleShape),
+                    color = if (blockState.power > 0) RedstoneBright else RedstoneOff,
+                    trackColor = CanvasBg
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Badges de Configuração
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -138,7 +136,7 @@ fun CircuitInspectorPanel(
                     CyberBadge(
                         label = "DIR",
                         value = blockState.facing.bedrockName.uppercase(),
-                        accentColor = NeonCyan
+                        accentColor = RedstoneAccent
                     )
                     if (blockState.type.isRepeater) {
                         CyberBadge(
@@ -151,14 +149,13 @@ fun CircuitInspectorPanel(
                         CyberBadge(
                             label = "MODO",
                             value = if (blockState.isSubtractMode) "SUBTR" else "COMP",
-                            accentColor = NeonBlueLight
+                            accentColor = TextWhite
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Botões de Ação Rápida (Pill Rounded)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -169,8 +166,8 @@ fun CircuitInspectorPanel(
                             icon = Icons.Default.TouchApp,
                             text = "ACIONAR",
                             modifier = Modifier.weight(1f),
-                            accentColor = NeonCyan,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                            accentColor = RedstoneAccent,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         )
                     }
 
@@ -180,8 +177,8 @@ fun CircuitInspectorPanel(
                             icon = Icons.Default.RotateRight,
                             text = "GIRAR",
                             modifier = Modifier.weight(1f),
-                            accentColor = ElectricBlue,
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                            accentColor = ButtonDefault,
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
                         )
                     }
 
@@ -190,7 +187,7 @@ fun CircuitInspectorPanel(
                         icon = Icons.Default.Delete,
                         modifier = Modifier.wrapContentWidth(),
                         accentColor = StatusError,
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                     )
                 }
             } else {
@@ -204,7 +201,6 @@ fun CircuitInspectorPanel(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Opções Visuais Rápidas
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -213,7 +209,7 @@ fun CircuitInspectorPanel(
                     onClick = onToggleOnionSkin,
                     text = if (isOnionSkinEnabled) "ONION: ON" else "ONION: OFF",
                     isActive = isOnionSkinEnabled,
-                    accentColor = NeonCyan,
+                    accentColor = ButtonDefault,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                 )
@@ -222,7 +218,7 @@ fun CircuitInspectorPanel(
                     onClick = onToggleSignalNumbers,
                     text = if (showSignalNumbers) "NUM: ON" else "NUM: OFF",
                     isActive = showSignalNumbers,
-                    accentColor = ElectricBlue,
+                    accentColor = ButtonDefault,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                 )

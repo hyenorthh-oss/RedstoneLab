@@ -68,10 +68,10 @@ fun ExportDialog(
                 .fillMaxWidth(0.88f)
                 .fillMaxHeight(0.90f)
                 .padding(12.dp),
-            shape = RoundedCornerShape(18.dp),
-            backgroundColor = SurfaceDarkElevated,
-            borderColor = NeonCyan,
-            borderWidth = 1.5.dp
+            shape = RoundedCornerShape(24.dp),
+            backgroundColor = SurfaceBar,
+            borderColor = BorderSubtle,
+            borderWidth = 1.dp
         ) {
             Column(
                 modifier = Modifier
@@ -87,11 +87,11 @@ fun ExportDialog(
                     Column {
                         Text(
                             text = "EXPORTAR .MCPACK PARA MINECRAFT BEDROCK",
-                            color = NeonCyan,
-                            fontSize = 15.sp,
+                            color = TextWhite,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp
                         )
                         Text(
                             text = "COMPATÍVEL COM BEDROCK 1.21+ (BEHAVIOR PACK AUTOMÁTICO)",
@@ -105,7 +105,7 @@ fun ExportDialog(
                         onClick = onDismiss,
                         icon = Icons.Default.Close,
                         contentDescription = "Fechar",
-                        size = 34.dp
+                        size = 40.dp
                     )
                 }
 
@@ -132,20 +132,20 @@ fun ExportDialog(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = GlassBorderSubtle,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            cursorColor = NeonCyan
+                            focusedBorderColor = RedstoneAccent,
+                            unfocusedBorderColor = BorderSubtle,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            cursorColor = RedstoneAccent
                         ),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(12.dp)
                     )
 
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
                         text = "Identificador sanitizado: /function $sanitizedName",
-                        color = NeonCyanDim,
+                        color = TextSecondary,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace
                     )
@@ -157,11 +157,11 @@ fun ExportDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        CyberBadge(label = "BLOCOS", value = "$totalBlocks", accentColor = NeonCyan)
+                        CyberBadge(label = "BLOCOS", value = "$totalBlocks", accentColor = RedstoneAccent)
                         CyberBadge(
                             label = "DIMENSÕES",
                             value = "${bounds.sizeX}x${bounds.sizeY}x${bounds.sizeZ}",
-                            accentColor = ElectricBlue
+                            accentColor = TextWhite
                         )
                         CyberBadge(label = "BEDROCK", value = "1.21+", accentColor = StatusSuccess)
                     }
@@ -172,8 +172,8 @@ fun ExportDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(SpaceDark.copy(alpha = 0.8f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceElevated)
                             .clickable { includeSmoothStoneBase = !includeSmoothStoneBase }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -182,16 +182,16 @@ fun ExportDialog(
                             checked = includeSmoothStoneBase,
                             onCheckedChange = { includeSmoothStoneBase = it },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = NeonCyan,
+                                checkedColor = RedstoneAccent,
                                 uncheckedColor = TextSecondary,
-                                checkmarkColor = CyberBlack
+                                checkmarkColor = TextWhite
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
                             Text(
                                 text = "Incluir piso base de pedra lisa (smooth_stone)",
-                                color = TextPrimary,
+                                color = TextWhite,
                                 fontSize = 12.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
@@ -217,13 +217,13 @@ fun ExportDialog(
                         Icon(
                             imageVector = if (showCommandsPreview) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = "Visualizar Comandos",
-                            tint = NeonCyan,
+                            tint = TextWhite,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (showCommandsPreview) "Ocultar comandos gerados" else "Visualizar comandos gerados (.mcfunction)",
-                            color = NeonCyan,
+                            color = TextWhite,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
@@ -236,14 +236,14 @@ fun ExportDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(140.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0xFF04060A))
-                                .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CanvasBg)
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                                 .padding(8.dp)
                         ) {
                             Text(
                                 text = mcfunctionScript,
-                                color = NeonCyanDim,
+                                color = TextSecondary,
                                 fontSize = 9.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 lineHeight = 13.sp
@@ -316,8 +316,8 @@ fun ExportSuccessDialog(
                 .fillMaxWidth(0.85f)
                 .wrapContentHeight()
                 .padding(16.dp),
-            shape = RoundedCornerShape(18.dp),
-            backgroundColor = SurfaceDarkElevated,
+            shape = RoundedCornerShape(24.dp),
+            backgroundColor = SurfaceBar,
             borderColor = StatusSuccess,
             borderWidth = 1.5.dp
         ) {
@@ -336,10 +336,10 @@ fun ExportSuccessDialog(
                         Text(
                             text = "PACOTE .MCPACK GERADO COM SUCESSO!",
                             color = StatusSuccess,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp
                         )
                         Text(
                             text = "Salvo em: Download/RedstoneLab/${packFile.name}",
@@ -353,7 +353,7 @@ fun ExportSuccessDialog(
                         onClick = onDismiss,
                         icon = Icons.Default.Close,
                         contentDescription = "Fechar",
-                        size = 34.dp
+                        size = 40.dp
                     )
                 }
 
@@ -377,7 +377,7 @@ fun ExportSuccessDialog(
                     text = "ABRIR NO MINECRAFT",
                     modifier = Modifier.fillMaxWidth(),
                     isActive = true,
-                    accentColor = StatusSuccess,
+                    accentColor = RedstoneAccent,
                     contentPadding = PaddingValues(vertical = 12.dp)
                 )
 
@@ -396,16 +396,16 @@ fun ExportSuccessDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(CyberBlack)
-                        .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CanvasBg)
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
                         text = spawnCommand,
-                        color = NeonCyan,
+                        color = TextWhite,
                         fontSize = 13.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold
@@ -420,8 +420,8 @@ fun ExportSuccessDialog(
                         },
                         icon = Icons.Default.ContentCopy,
                         text = "COPIAR",
-                        accentColor = ElectricBlue,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        accentColor = ButtonDefault,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     )
                 }
 
@@ -431,15 +431,15 @@ fun ExportSuccessDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(SpaceDark)
-                        .border(1.dp, GlassBorderSubtle, RoundedCornerShape(8.dp))
-                        .padding(10.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(SurfaceElevated)
+                        .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
                 ) {
                     Column {
                         Text(
                             text = "COMO SPAWNAR O CIRCUITO NO SEU MUNDO:",
-                            color = TextPrimary,
+                            color = TextWhite,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold

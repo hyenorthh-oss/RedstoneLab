@@ -52,10 +52,10 @@ fun ProjectsDialog(
                 .fillMaxWidth(0.85f)
                 .fillMaxHeight(0.88f)
                 .padding(16.dp),
-            shape = RoundedCornerShape(18.dp),
-            backgroundColor = SurfaceDarkElevated,
-            borderColor = GlassBorder,
-            borderWidth = 1.5.dp
+            shape = RoundedCornerShape(24.dp),
+            backgroundColor = SurfaceBar,
+            borderColor = BorderSubtle,
+            borderWidth = 1.dp
         ) {
             Column(
                 modifier = Modifier
@@ -71,11 +71,11 @@ fun ProjectsDialog(
                     Column {
                         Text(
                             text = "GERENCIADOR DE PROJETOS",
-                            color = NeonCyan,
-                            fontSize = 15.sp,
+                            color = TextWhite,
+                            fontSize = 14.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp
                         )
                         Text(
                             text = "ARMAZENAMENTO LOCAL 100% OFFLINE (JSON)",
@@ -94,14 +94,14 @@ fun ProjectsDialog(
                             icon = Icons.Default.Add,
                             text = "NOVO CIRCUITO",
                             accentColor = StatusSuccess,
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         )
 
                         GlassIconButton(
                             onClick = onDismiss,
                             icon = Icons.Default.Close,
                             contentDescription = "Fechar",
-                            size = 34.dp
+                            size = 40.dp
                         )
                     }
                 }
@@ -131,9 +131,9 @@ fun ProjectsDialog(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(SpaceDark.copy(alpha = 0.85f))
-                                    .border(1.dp, GlassBorderSubtle, RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(SurfaceElevated)
+                                    .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
                                     .clickable {
                                         onProjectSelected(project.id)
                                         onDismiss()
@@ -148,7 +148,7 @@ fun ProjectsDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = project.name,
-                                            color = TextPrimary,
+                                            color = TextWhite,
                                             fontSize = 13.sp,
                                             fontFamily = FontFamily.Monospace,
                                             fontWeight = FontWeight.Bold
@@ -169,14 +169,14 @@ fun ProjectsDialog(
                                         CyberBadge(
                                             label = "BLOCOS",
                                             value = "${project.blockCount}",
-                                            accentColor = NeonCyan
+                                            accentColor = RedstoneAccent
                                         )
 
                                         GlassIconButton(
                                             onClick = { onProjectDeleted(project.id) },
                                             icon = Icons.Default.Delete,
                                             contentDescription = "Excluir",
-                                            size = 32.dp,
+                                            size = 36.dp,
                                             accentColor = StatusError
                                         )
                                     }

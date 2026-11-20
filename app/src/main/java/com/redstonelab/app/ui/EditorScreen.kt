@@ -3,6 +3,7 @@ package com.redstonelab.app.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,7 +20,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -32,9 +32,9 @@ import com.redstonelab.app.components.GlassButton
 import com.redstonelab.app.components.GlassIconButton
 import com.redstonelab.app.model.BlockCategory
 import com.redstonelab.app.model.BlockType
+import com.redstonelab.app.renderer.BlockVoxelPreview
 import com.redstonelab.app.renderer.IsometricCanvas
 import com.redstonelab.app.theme.*
-import com.redstonelab.app.viewmodel.EditorMode
 import com.redstonelab.app.viewmodel.EditorTool
 import com.redstonelab.app.viewmodel.EditorViewModel
 
@@ -46,11 +46,19 @@ fun EditorScreen(
     val context = LocalContext.current
     var selectedCategory by remember { mutableStateOf(BlockCategory.TRANSMISSION) }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(MatteBackground)
+            .background(CanvasBg)
     ) {
+        // Inicializa o enquadramento e zoom do tabuleiro para ocupar ~80% da tela útil
+        LaunchedEffect(constraints.maxWidth, constraints.maxHeight) {
+            viewModel.initializeCamera(
+                constraints.maxWidth.toFloat(),
+                constraints.maxHeight.toFloat()
+            )
+        }
+
         // 1. Canvas Isométrico 2.5D com Câmera Rotativa Interativa e Renderizador Voxel 3D
         IsometricCanvas(
             grid = viewModel.circuitGrid,
@@ -68,28 +76,31 @@ fun EditorScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Barra Superior Fosca Moderna com Botões Arredondados
-        GlassTopBar(
-            viewModel = viewModel,
+        // 2. Barra Superior com Padding de Safe Drawing (evita cortes pela barra de status/câmera)
+        Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        )
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            GlassTopBar(viewModel = viewModel)
+        }
 
         // 3. Lateral Direita: Seletor de Camada Y & Inspetor de Bloco
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 56.dp, end = 8.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(top = 66.dp, end = 10.dp),
             horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Seletor de Camadas Y
+            // Seletor de Camadas Y em formato de pílula
             GlassBox(
-                shape = RoundedCornerShape(50),
-                backgroundColor = MatteSurfaceElevated,
-                borderColor = MatteBorder
+                shape = CircleShape,
+                backgroundColor = SurfaceBar,
+                borderColor = BorderSubtle
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
@@ -100,20 +111,20 @@ fun EditorScreen(
                         onClick = { viewModel.setLayer(viewModel.activeLayerY - 1) },
                         icon = Icons.Default.Remove,
                         contentDescription = "Camada Abaixo",
-                        size = 28.dp
+                        size = 38.dp
                     )
 
                     CyberBadge(
                         label = "CAMADA",
                         value = "Y: ${viewModel.activeLayerY}",
-                        accentColor = NeonCyan
+                        accentColor = RedstoneAccent
                     )
 
                     GlassIconButton(
                         onClick = { viewModel.setLayer(viewModel.activeLayerY + 1) },
                         icon = Icons.Default.Add,
                         contentDescription = "Camada Acima",
-                        size = 28.dp
+                        size = 38.dp
                     )
                 }
             }
@@ -151,17 +162,21 @@ fun EditorScreen(
             }
         }
 
-        // 4. Barra Inferior: Abas de Categoria + Paleta Deslizável
-        GlassBottomPalette(
-            selectedCategory = selectedCategory,
-            onCategorySelected = { selectedCategory = it },
-            selectedBlockType = viewModel.selectedBlockType,
-            onBlockTypeSelected = { viewModel.setBlockType(it) },
+        // 4. Barra Inferior: Abas de Categoria + Paleta Deslizável com Ícones Voxel 3D
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        )
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            GlassBottomPalette(
+                selectedCategory = selectedCategory,
+                onCategorySelected = { selectedCategory = it },
+                selectedBlockType = viewModel.selectedBlockType,
+                onBlockTypeSelected = { viewModel.setBlockType(it) }
+            )
+        }
 
         // 5. Diálogos e Modais
         if (viewModel.showProjectsDialog) {
@@ -213,45 +228,45 @@ private fun GlassTopBar(
     val context = LocalContext.current
 
     GlassBox(
-        modifier = modifier,
-        shape = RoundedCornerShape(50),
-        backgroundColor = MatteSurfaceElevated,
-        borderColor = MatteBorder
+        modifier = modifier.fillMaxWidth(),
+        shape = CircleShape,
+        backgroundColor = SurfaceBar,
+        borderColor = BorderSubtle
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Esquerda: Logo, Projetos e Exemplos
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(NeonCyan, ElectricBlue))),
+                            .background(RedstoneAccent),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = "Logo",
-                            tint = MatteBackground,
-                            modifier = Modifier.size(18.dp)
+                            tint = TextWhite,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
                         text = "REDSTONELAB v2",
-                        color = NeonCyan,
-                        fontSize = 11.sp,
+                        color = TextWhite,
+                        fontSize = 12.sp,
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.8.sp
@@ -265,55 +280,43 @@ private fun GlassTopBar(
                     },
                     icon = Icons.Default.FolderOpen,
                     text = "PROJETOS",
-                    accentColor = ElectricBlue,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                 )
 
                 GlassButton(
                     onClick = { viewModel.showPresetsDialog = true },
                     icon = Icons.Default.MenuBook,
                     text = "EXEMPLOS",
-                    accentColor = NeonBlueLight,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                 )
             }
 
-            // Centro: Rotação da Câmera 3D, Simulação e Ticks
+            // Centro: Rotação Isométrica do Tabuleiro, Simulação e Ticks
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Controles de Câmera 3D
+                // Botão de Girar Tabuleiro 360° em passos de 90° + Indicador
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     GlassIconButton(
-                        onClick = { viewModel.rotateCameraCounterClockwise() },
-                        icon = Icons.Default.RotateLeft,
-                        contentDescription = "Girar Câmera Esquerda",
-                        size = 30.dp,
-                        accentColor = NeonCyan
-                    )
-
-                    GlassButton(
-                        onClick = { viewModel.resetCamera() },
-                        icon = Icons.Default.Explore,
-                        text = viewModel.cameraOrientationLabel,
-                        accentColor = NeonCyan,
-                        contentPadding = PaddingValues(horizontal = 7.dp, vertical = 4.dp)
-                    )
-
-                    GlassIconButton(
-                        onClick = { viewModel.rotateCameraClockwise() },
+                        onClick = { viewModel.rotateCamera() },
                         icon = Icons.Default.RotateRight,
-                        contentDescription = "Girar Câmera Direita",
-                        size = 30.dp,
-                        accentColor = NeonCyan
+                        contentDescription = "Girar Tabuleiro 90°",
+                        size = 46.dp,
+                        accentColor = ButtonDefault
+                    )
+
+                    CyberBadge(
+                        label = "VISÃO",
+                        value = viewModel.cameraOrientationLabel,
+                        accentColor = RedstoneAccent
                     )
                 }
-
-                Spacer(modifier = Modifier.width(2.dp))
 
                 // SIMULAR / PAUSAR
                 val isSimRunning = viewModel.simulationState.isRunning
@@ -322,8 +325,8 @@ private fun GlassTopBar(
                     icon = if (isSimRunning) Icons.Default.Pause else Icons.Default.PlayArrow,
                     text = if (isSimRunning) "PAUSAR" else "SIMULAR",
                     isActive = isSimRunning,
-                    accentColor = if (isSimRunning) StatusSuccess else NeonCyan,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 5.dp)
+                    accentColor = RedstoneAccent,
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 )
 
                 // +1 TICK
@@ -331,38 +334,36 @@ private fun GlassTopBar(
                     onClick = { viewModel.stepSingleTick() },
                     icon = Icons.Default.SkipNext,
                     text = "+1 TICK",
-                    accentColor = ElectricBlue,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp)
+                    accentColor = ButtonDefault,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 )
 
                 CyberBadge(
                     label = "TICKS",
                     value = "${viewModel.simulationState.totalTicks}",
-                    accentColor = NeonCyan
+                    accentColor = TextWhite
                 )
             }
 
-            // Direita: Undo, Redo, Borracha, Girar Bloco, e EXPORTAR .MCPACK
+            // Direita: Undo, Redo, Borracha, Girar Bloco e EXPORTAR .MCPACK
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Desfazer / Refazer
                 GlassIconButton(
                     onClick = { viewModel.undo() },
                     icon = Icons.Default.Undo,
                     contentDescription = "Desfazer",
-                    size = 30.dp
+                    size = 46.dp
                 )
 
                 GlassIconButton(
                     onClick = { viewModel.redo() },
                     icon = Icons.Default.Redo,
                     contentDescription = "Refazer",
-                    size = 30.dp
+                    size = 46.dp
                 )
 
-                // Borracha
                 val isErasing = viewModel.selectedTool == EditorTool.ERASE
                 GlassIconButton(
                     onClick = {
@@ -372,26 +373,25 @@ private fun GlassTopBar(
                     contentDescription = "Borracha",
                     isActive = isErasing,
                     accentColor = StatusError,
-                    size = 30.dp
+                    size = 46.dp
                 )
 
-                // Rotacionar Bloco
                 GlassIconButton(
                     onClick = { viewModel.rotateFacingClockwise() },
                     icon = Icons.Default.Refresh,
                     contentDescription = "Girar Bloco",
-                    size = 30.dp,
-                    accentColor = ElectricBlue
+                    size = 46.dp,
+                    accentColor = ButtonDefault
                 )
 
-                // Botão destaque: EXPORTAR .MCPACK
+                // Botão de Destaque em Vermelho Redstone Fosco: EXPORTAR .MCPACK
                 GlassButton(
                     onClick = { viewModel.showExportDialog = true },
                     icon = Icons.Default.FileDownload,
                     text = "EXPORTAR .MCPACK",
                     isActive = true,
-                    accentColor = NeonCyan,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp)
+                    accentColor = RedstoneAccent,
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                 )
             }
         }
@@ -407,35 +407,35 @@ private fun GlassBottomPalette(
     modifier: Modifier = Modifier
 ) {
     GlassBox(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        backgroundColor = MatteSurfaceElevated,
-        borderColor = MatteBorder
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        backgroundColor = SurfaceBar,
+        borderColor = BorderSubtle
     ) {
-        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-            // 4 Abas de Categoria com estilo Pill
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            // Abas de Categoria em formato de pílula
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 BlockCategory.entries.forEach { category ->
                     val isSelected = category == selectedCategory
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(if (isSelected) NeonCyan.copy(alpha = 0.18f) else Color.Transparent)
+                            .clip(CircleShape)
+                            .background(if (isSelected) ButtonActive else Color.Transparent)
                             .border(
-                                width = 1.dp,
-                                color = if (isSelected) NeonCyan else MatteBorderSubtle,
-                                shape = RoundedCornerShape(50)
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) BorderSelected else ButtonBorder,
+                                shape = CircleShape
                             )
                             .clickable { onCategorySelected(category) }
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = category.label.uppercase(),
-                            color = if (isSelected) NeonCyan else TextSecondary,
-                            fontSize = 10.sp,
+                            color = if (isSelected) TextWhite else TextSecondary,
+                            fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
@@ -443,26 +443,58 @@ private fun GlassBottomPalette(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-            // Paleta deslizável com botões arredondados (sem emojis)
+            // Paleta deslizável com botões grandes de 52dp+, ícone voxel 3D e borda branca de 2dp
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val categoryBlocks = BlockType.entries.filter { it.category == selectedCategory && it != BlockType.AIR }
                 for (blockType in categoryBlocks) {
                     val isSelected = blockType == selectedBlockType
-                    GlassButton(
-                        onClick = { onBlockTypeSelected(blockType) },
-                        text = blockType.displayName.uppercase(),
-                        isActive = isSelected,
-                        accentColor = if (isSelected) NeonCyan else ElectricBlue,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    )
+
+                    Box(
+                        modifier = Modifier
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (isSelected) ButtonActive else ButtonDefault)
+                            .border(
+                                border = if (isSelected) {
+                                    BorderStroke(2.dp, BorderSelected)
+                                } else {
+                                    BorderStroke(1.dp, ButtonBorder)
+                                },
+                                shape = RoundedCornerShape(18.dp)
+                            )
+                            .clickable { onBlockTypeSelected(blockType) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Ícone Voxel 3D do bloco
+                            BlockVoxelPreview(
+                                type = blockType,
+                                size = 32.dp
+                            )
+
+                            // Nome do Bloco em tipografia limpa sem emojis
+                            Text(
+                                text = blockType.displayName.uppercase(),
+                                color = TextWhite,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
                 }
             }
         }

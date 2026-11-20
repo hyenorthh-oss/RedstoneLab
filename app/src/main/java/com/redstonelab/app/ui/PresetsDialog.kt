@@ -43,10 +43,10 @@ fun PresetsDialog(
                 .fillMaxWidth(0.92f)
                 .fillMaxHeight(0.85f)
                 .padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            backgroundColor = SurfaceDarkElevated,
-            borderColor = GlassBorder,
-            borderWidth = 1.5.dp
+            shape = RoundedCornerShape(24.dp),
+            backgroundColor = SurfaceBar,
+            borderColor = BorderSubtle,
+            borderWidth = 1.dp
         ) {
             Column(
                 modifier = Modifier
@@ -62,16 +62,16 @@ fun PresetsDialog(
                     Column {
                         Text(
                             text = "CIRCUIT PRESETS LIBRARY",
-                            color = NeonCyan,
-                            fontSize = 16.sp,
+                            color = TextWhite,
+                            fontSize = 15.sp,
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp
                         )
                         Text(
                             text = "CLASSIC & ADVANCED REDSTONE MODULES",
                             color = TextSecondary,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
                     }
@@ -80,7 +80,7 @@ fun PresetsDialog(
                         onClick = onDismiss,
                         icon = Icons.Default.Close,
                         contentDescription = "Close",
-                        size = 36.dp
+                        size = 40.dp
                     )
                 }
 
@@ -114,9 +114,9 @@ private fun PresetCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(SpaceDark.copy(alpha = 0.85f))
-            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceElevated)
+            .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
             .clickable(onClick = onLoad)
             .padding(14.dp)
     ) {
@@ -128,15 +128,15 @@ private fun PresetCard(
             ) {
                 Text(
                     text = preset.title,
-                    color = TextPrimary,
-                    fontSize = 14.sp,
+                    color = TextWhite,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
                 )
 
                 val diffColor = when (preset.difficulty) {
                     "Beginner" -> StatusSuccess
-                    "Intermediate" -> NeonCyan
+                    "Intermediate" -> RedstoneAccent
                     else -> StatusWarning
                 }
                 CyberBadge(label = "DIFF", value = preset.difficulty, accentColor = diffColor)
@@ -163,13 +163,14 @@ private fun PresetCard(
                     preset.tags.take(3).forEach { tag ->
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(CyberBlack)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CanvasBg)
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(6.dp))
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = tag.uppercase(),
-                                color = NeonCyanDim,
+                                color = TextSecondary,
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.Monospace
                             )
@@ -181,8 +182,8 @@ private fun PresetCard(
                     onClick = onLoad,
                     icon = Icons.Default.Download,
                     text = "LOAD CIRCUIT",
-                    accentColor = NeonCyan,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    accentColor = RedstoneAccent,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }

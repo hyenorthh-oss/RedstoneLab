@@ -10,26 +10,26 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = NeonCyan,
-    onPrimary = MatteBackground,
-    primaryContainer = MatteSurfaceElevated,
-    onPrimaryContainer = TextPrimary,
-    secondary = ElectricBlue,
-    onSecondary = TextPrimary,
-    secondaryContainer = SurfaceDarkElevated,
-    onSecondaryContainer = TextPrimary,
-    tertiary = NeonBlueLight,
-    onTertiary = MatteBackground,
-    background = MatteBackground,
-    onBackground = TextPrimary,
-    surface = MatteSurface,
-    onSurface = TextPrimary,
-    surfaceVariant = MatteSurfaceElevated,
+    primary = RedstoneAccent,
+    onPrimary = TextWhite,
+    primaryContainer = SurfaceElevated,
+    onPrimaryContainer = TextWhite,
+    secondary = ButtonDefault,
+    onSecondary = TextWhite,
+    secondaryContainer = SurfaceElevated,
+    onSecondaryContainer = TextWhite,
+    tertiary = RedstoneAccentPressed,
+    onTertiary = TextWhite,
+    background = CanvasBg,
+    onBackground = TextWhite,
+    surface = SurfaceBar,
+    onSurface = TextWhite,
+    surfaceVariant = SurfaceElevated,
     onSurfaceVariant = TextSecondary,
-    outline = MatteBorderSubtle,
-    outlineVariant = MatteBorder,
+    outline = BorderSubtle,
+    outlineVariant = ButtonBorder,
     error = StatusError,
-    onError = TextPrimary
+    onError = TextWhite
 )
 
 @Composable
@@ -38,8 +38,8 @@ fun RedstoneLabTheme(content: @Composable () -> Unit) {
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = MatteBackground.toArgb()
-            window.navigationBarColor = MatteBackground.toArgb()
+            window.statusBarColor = CanvasBg.toArgb()
+            window.navigationBarColor = CanvasBg.toArgb()
             val insetsController = WindowCompat.getInsetsController(window, view)
             insetsController.isAppearanceLightStatusBars = false
             insetsController.isAppearanceLightNavigationBars = false
