@@ -26,21 +26,19 @@ class McpackExporterTest {
     fun testManifestJsonBedrock21() {
         val manifest = McpackExporter.generateManifestJson("porta_secreta", "Porta Secreta")
         assertTrue(manifest.contains("\"format_version\": 2"))
-        assertTrue(manifest.contains("\"min_engine_version\": [\n      1,\n      21,\n      0\n    ]"))
+        assertTrue(manifest.contains("\"min_engine_version\": [1, 21, 0]"))
         assertTrue(manifest.contains("\"type\": \"data\""))
     }
 
     @Test
     fun testStrictBlockOrderInMcfunction() {
         val grid = CircuitGrid()
-        // Adiciona pó dependente e pedra sólida
         grid.set(BlockState(BlockCoord(1, 1, 1), BlockType.REDSTONE_WIRE, power = 15))
         grid.set(BlockState(BlockCoord(1, 0, 1), BlockType.SMOOTH_STONE))
         grid.set(BlockState(BlockCoord(2, 1, 1), BlockType.REDSTONE_REPEATER, facing = Facing.EAST))
 
         val script = McpackExporter.generateMcfunctionScript(grid, "teste_ordem", includeSmoothStoneBase = true)
 
-        // 1. Limpeza e base devem vir antes dos blocos
         val fillIndex = script.indexOf("fill ~0 ~0 ~0")
         val solidIndex = script.indexOf("setblock ~0 ~0 ~0 smooth_stone replace")
         val wireIndex = script.indexOf("setblock ~0 ~1 ~0 redstone_wire")
@@ -57,7 +55,8 @@ class McpackExporterTest {
         grid.set(BlockState(BlockCoord(0, 0, 0), BlockType.SMOOTH_STONE))
         grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.REDSTONE_LAMP))
 
-        val (_, zipBytes) = McpackExporter.buildMcpackBytes(grid, "Meu Circuito", true)
+        val (sanitized, zipBytes) = McpackExporter.buildMcpackBytes(grid, "Meu Circuito", true)
+        assertEquals("meu_circuito", sanitized)
         assertNotNull(zipBytes)
         assertTrue(zipBytes.isNotEmpty())
 

@@ -1,15 +1,8 @@
 package com.redstonelab.app.exporter
 
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Rect
-import android.os.Build
 import android.os.Environment
-import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import com.redstonelab.app.model.BlockState
 import com.redstonelab.app.model.BlockType
@@ -18,7 +11,11 @@ import com.redstonelab.app.model.Facing
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.text.Normalizer
 import java.util.UUID
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -28,11 +25,13 @@ import java.util.zip.ZipOutputStream
 object McpackExporter {
 
     fun sanitizeCircuitName(name: String): String {
-        val sanitized = name.trim().lowercase()
+        val normalized = Normalizer.normalize(name.trim(), Normalizer.Form.NFD)
+            .replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "")
+            .lowercase()
             .replace("[^a-z0-9_]".toRegex(), "_")
             .replace("_+".toRegex(), "_")
             .trim('_')
-        return sanitized.ifEmpty { "circuito" }
+        return normalized.ifEmpty { "circuito" }
     }
 
     fun generateManifestJson(sanitizedName: String, displayName: String): String {
@@ -93,7 +92,6 @@ object McpackExporter {
 
         val allBlocks = grid.getAll().values.toList()
 
-        // Separa blocos em sólidos/estruturais vs dependentes
         val solidBlocks = allBlocks.filter { !it.type.isDependent && it.type != BlockType.AIR }
             .sortedWith(compareBy<BlockState> { it.y }.thenBy { it.z }.thenBy { it.x })
 
@@ -132,7 +130,6 @@ object McpackExporter {
     private fun formatBedrockSetblock(b: BlockState, rx: Int, ry: Int, rz: Int): String? {
         val pos = "~$rx ~$ry ~$rz"
         return when (b.type) {
-            // Estruturais & Sólidos
             BlockType.SMOOTH_STONE -> "setblock $pos smooth_stone replace"
             BlockType.IRON_BLOCK -> "setblock $pos iron_block replace"
             BlockType.RED_WOOL -> "setblock $pos wool [\"color\"=\"red\"] replace"
@@ -147,7 +144,6 @@ object McpackExporter {
             BlockType.TARGET_BLOCK -> "setblock $pos target replace"
             BlockType.REDSTONE_BLOCK -> "setblock $pos redstone_block replace"
 
-            // Transmissão e Lógica
             BlockType.REDSTONE_WIRE -> {
                 val sig = b.power.coerceIn(0, 15)
                 "setblock $pos redstone_wire [\"redstone_signal\"=$sig] replace"
@@ -167,7 +163,6 @@ object McpackExporter {
                 "setblock $pos $blockId [\"minecraft:cardinal_direction\"=\"$dir\",\"output_subtract_bit\"=$subtractBit] replace"
             }
 
-            // Fontes de Energia
             BlockType.LEVER -> {
                 val openBit = b.isActive
                 val leverDir = when (b.attachmentFacing) {
@@ -213,7 +208,6 @@ object McpackExporter {
             BlockType.DAYLIGHT_DETECTOR -> "setblock $pos daylight_detector replace"
             BlockType.SCULK_SENSOR -> "setblock $pos sculk_sensor replace"
 
-            // Mecanismos e Saídas
             BlockType.REDSTONE_LAMP -> {
                 val blockId = if (b.isActive || b.power > 0) "lit_redstone_lamp" else "redstone_lamp"
                 "setblock $pos $blockId replace"
@@ -284,40 +278,82 @@ object McpackExporter {
         }
     }
 
+    /**
+     * Gera os bytes de uma imagem PNG 64x64 de alta qualidade sem depender de Android Bitmap,
+     * garantindo compatibilidade total com testes unitários em qualquer ambiente JVM.
+     */
     fun createPackIcon(): ByteArray {
-        val size = 256
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+        val width = 64
+        val height = 64
+        val rawData = ByteArray(height * (1 + width * 4))
 
-        val bgPaint = Paint().apply { color = android.graphics.Color.rgb(6, 9, 19) }
-        canvas.drawRect(Rect(0, 0, size, size), bgPaint)
+        for (y in 0 until height) {
+            val rowOffset = y * (1 + width * 4)
+            rawData[rowOffset] = 0 // Filtro de linha: None
+            for (x in 0 until width) {
+                val pixelOffset = rowOffset + 1 + x * 4
+                val isBorder = x < 3 || x >= width - 3 || y < 3 || y >= height - 3
+                val isTrace = (y in 28..33 && x in 10..32) || (x in 30..33 && y in 10..32) || (x - y in -2..2 && x >= 32)
+                val isNode = (x - 32) * (x - 32) + (y - 32) * (y - 32) <= 36
 
-        val borderPaint = Paint().apply {
-            color = android.graphics.Color.rgb(0, 240, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = 10f
+                if (isBorder || isNode) {
+                    rawData[pixelOffset] = 0.toByte()       // R
+                    rawData[pixelOffset + 1] = 240.toByte() // G
+                    rawData[pixelOffset + 2] = 255.toByte() // B
+                    rawData[pixelOffset + 3] = 255.toByte() // A
+                } else if (isTrace) {
+                    rawData[pixelOffset] = 255.toByte()     // R
+                    rawData[pixelOffset + 1] = 36.toByte()  // G
+                    rawData[pixelOffset + 2] = 52.toByte()  // B
+                    rawData[pixelOffset + 3] = 255.toByte() // A
+                } else {
+                    rawData[pixelOffset] = 6.toByte()       // R
+                    rawData[pixelOffset + 1] = 9.toByte()   // G
+                    rawData[pixelOffset + 2] = 19.toByte()  // B
+                    rawData[pixelOffset + 3] = 255.toByte() // A
+                }
+            }
         }
-        canvas.drawRect(Rect(5, 5, size - 5, size - 5), borderPaint)
 
-        val tracePaint = Paint().apply {
-            color = android.graphics.Color.rgb(255, 36, 52)
-            strokeWidth = 14f
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
+        val deflater = Deflater(Deflater.BEST_COMPRESSION)
+        deflater.setInput(rawData)
+        deflater.finish()
+        val compressed = ByteArrayOutputStream()
+        val buf = ByteArray(1024)
+        while (!deflater.finished()) {
+            val count = deflater.deflate(buf)
+            compressed.write(buf, 0, count)
         }
-        canvas.drawLine(40f, 128f, 128f, 128f, tracePaint)
-        canvas.drawLine(128f, 128f, 200f, 56f, tracePaint)
-        canvas.drawLine(128f, 128f, 200f, 200f, tracePaint)
-
-        val glowPaint = Paint().apply {
-            color = android.graphics.Color.rgb(0, 240, 255)
-            style = Paint.Style.FILL
-        }
-        canvas.drawCircle(128f, 128f, 22f, glowPaint)
+        deflater.end()
+        val idatData = compressed.toByteArray()
 
         val out = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        out.write(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+        writeChunk(out, "IHDR", ByteBuffer.allocate(13).apply {
+            putInt(width)
+            putInt(height)
+            put(8)
+            put(6) // RGBA
+            put(0)
+            put(0)
+            put(0)
+        }.array())
+        writeChunk(out, "IDAT", idatData)
+        writeChunk(out, "IEND", ByteArray(0))
         return out.toByteArray()
+    }
+
+    private fun writeChunk(out: ByteArrayOutputStream, type: String, data: ByteArray) {
+        val length = data.size
+        out.write(ByteBuffer.allocate(4).putInt(length).array())
+        val typeBytes = type.toByteArray(Charsets.US_ASCII)
+        out.write(typeBytes)
+        out.write(data)
+
+        val crc = CRC32()
+        crc.update(typeBytes)
+        crc.update(data)
+        out.write(ByteBuffer.allocate(4).putInt(crc.value.toInt()).array())
     }
 
     fun buildMcpackBytes(
@@ -348,9 +384,6 @@ object McpackExporter {
         return Pair(sanitized, out.toByteArray())
     }
 
-    /**
-     * Salva o .mcpack em /sdcard/Download/RedstoneLab/<nome>.mcpack e no cache do app para FileProvider.
-     */
     fun saveMcpackFile(
         context: Context,
         grid: CircuitGrid,
@@ -360,7 +393,6 @@ object McpackExporter {
         val (sanitized, zipBytes) = buildMcpackBytes(grid, circuitName, includeSmoothStoneBase)
         val fileName = "$sanitized.mcpack"
 
-        // 1. Salva na pasta do Download acessível
         try {
             val downloadDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "RedstoneLab")
             if (!downloadDir.exists()) {
@@ -370,16 +402,12 @@ object McpackExporter {
             FileOutputStream(targetFile).use { it.write(zipBytes) }
         } catch (_: Exception) {}
 
-        // 2. Salva no cache interno para o FileProvider seguro
         val cacheDir = File(context.cacheDir, "exports").apply { mkdirs() }
         val cacheFile = File(cacheDir, fileName)
         FileOutputStream(cacheFile).use { it.write(zipBytes) }
         return cacheFile
     }
 
-    /**
-     * Cria o Intent para abrir diretamente no Minecraft Bedrock instalado ou no compartilhador nativo.
-     */
     fun createOpenInMinecraftIntent(context: Context, packFile: File): Intent {
         val uri = FileProvider.getUriForFile(
             context,

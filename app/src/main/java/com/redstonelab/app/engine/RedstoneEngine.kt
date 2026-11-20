@@ -10,19 +10,6 @@ import kotlin.math.max
 
 /**
  * Motor de Simulação de Redstone em Tempo Real (Minecraft Bedrock / Java Logic).
- *
- * Suporta:
- * - Ciclo de ticks discretos (10 ticks/s padrão).
- * - Força de sinal 0 a 15 com decaimento de 1 por bloco de pó.
- * - Energia forte (strong power) vs energia fraca (weak power).
- * - Lajes superiores (diodo vertical) e Vidro transparente.
- * - Inversão de tochas com fila de atraso de 1 tick.
- * - Repetidores com atraso de 1 a 4 ticks e travamento lateral.
- * - Comparadores nos modos Comparar e Subtrair.
- * - Observadores com pulso de 1 tick na saída traseira.
- * - Lâmpada de Cobre (Copper Bulb) com comportamento T-Flip-Flop nativo na borda de subida.
- * - Pistões e pistões grudentos com empurrão/puxão de blocos até 12 blocos, respeitando Obsidiana como imóvel.
- * - Lâmpadas, Portas de Ferro, Alçapões, Note Block, TNT e Sino com feedback de ativação.
  */
 class RedstoneEngine(val grid: CircuitGrid) {
 
@@ -41,10 +28,7 @@ class RedstoneEngine(val grid: CircuitGrid) {
     private val repeaterQueue = mutableListOf<ScheduledRepeaterEvent>()
     private val torchQueue = mutableListOf<ScheduledTorchEvent>()
 
-    // Track state changes in front of observers
     private val previousObserverWatchedTypes = HashMap<BlockCoord, BlockType>()
-
-    // Track previous power states for rising edge detection (e.g. Copper Bulb T-Flip-Flop)
     private val previousBlockPowers = HashMap<BlockCoord, Int>()
 
     var tickCount: Long = 0L
@@ -60,13 +44,13 @@ class RedstoneEngine(val grid: CircuitGrid) {
         val all = grid.getAll()
         for ((_, state) in all) {
             val resetState = when (state.type) {
-                BlockType.LEVER -> state // keep lever user state
+                BlockType.LEVER -> state
                 BlockType.DAYLIGHT_DETECTOR -> state
                 BlockType.REDSTONE_BLOCK -> state.withPower(15)
                 BlockType.REDSTONE_TORCH -> state.copy(isActive = true, power = 15)
                 BlockType.REDSTONE_REPEATER -> state.copy(power = 0, isLocked = false)
                 BlockType.REDSTONE_COMPARATOR -> state.copy(power = 0)
-                BlockType.COPPER_BULB -> state.copy(power = 0) // keep isActive T-Flip-Flop
+                BlockType.COPPER_BULB -> state.copy(power = 0)
                 BlockType.REDSTONE_LAMP -> state.copy(power = 0, isActive = false)
                 BlockType.IRON_DOOR, BlockType.IRON_TRAPDOOR -> state.copy(isActive = false)
                 BlockType.TNT -> state.copy(isActive = false)
@@ -89,31 +73,14 @@ class RedstoneEngine(val grid: CircuitGrid) {
     fun stepTick() {
         tickCount++
 
-        // 1. Processa botões, sensores de sculk e pulsos de observadores
         processPulseCountdowns()
-
-        // 2. Processa atrasos agendados de repetidores
         processRepeaterQueue()
-
-        // 3. Processa eventos agendados de tochas (inversão com 1 tick de atraso)
         processTorchQueue()
-
-        // 4. Atualiza entradas e travamento lateral de repetidores
         updateRepeaters()
-
-        // 5. Atualiza agendamentos de tochas
         updateTorchSchedules()
-
-        // 6. Atualiza comparadores (Comparar vs Subtrair)
         updateComparators()
-
-        // 7. Propagação de sinal de pó de redstone na grade 3D
         recalculateWireSignals()
-
-        // 8. Atualiza atuadores (Lâmpadas, Lâmpada de Cobre, Pistões, Portas, TNT)
         updateActuators()
-
-        // 9. Observadores: detecta mudanças na face frontal
         detectObserverTriggers()
     }
 
@@ -124,18 +91,10 @@ class RedstoneEngine(val grid: CircuitGrid) {
                 val nextTicks = state.pulseTicksLeft - 1
                 if (nextTicks == 0) {
                     when (state.type) {
-                        BlockType.STONE_BUTTON -> {
-                            grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
-                        }
-                        BlockType.SCULK_SENSOR -> {
-                            grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
-                        }
-                        BlockType.OBSERVER -> {
-                            grid.set(state.copy(power = 0, pulseTicksLeft = 0))
-                        }
-                        else -> {
-                            grid.set(state.copy(pulseTicksLeft = 0))
-                        }
+                        BlockType.STONE_BUTTON -> grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
+                        BlockType.SCULK_SENSOR -> grid.set(state.copy(isActive = false, power = 0, pulseTicksLeft = 0))
+                        BlockType.OBSERVER -> grid.set(state.copy(power = 0, pulseTicksLeft = 0))
+                        else -> grid.set(state.copy(pulseTicksLeft = 0))
                     }
                 } else {
                     grid.set(state.copy(pulseTicksLeft = nextTicks))
@@ -180,7 +139,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.REDSTONE_REPEATER) continue
 
-            // Verifica travamento lateral por outro repetidor ou comparador
             val leftSide = coord.offset(state.facing.counterClockwise())
             val rightSide = coord.offset(state.facing.clockwise())
             val isLocked = isRepeaterSidePowered(leftSide, state.facing.clockwise()) ||
@@ -191,7 +149,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
             }
             if (isLocked) continue
 
-            // Sinal na entrada traseira
             val rearCoord = coord.offset(state.facing.opposite)
             val rearPower = getOutputPowerTowards(rearCoord, state.facing)
             val desiredOutput = if (rearPower > 0) 15 else 0
@@ -220,12 +177,11 @@ class RedstoneEngine(val grid: CircuitGrid) {
             if (state.type != BlockType.REDSTONE_TORCH) continue
 
             val baseCoord = when (state.attachmentFacing) {
-                Facing.DOWN -> coord.offset(Facing.DOWN) // torch on floor
-                else -> coord.offset(state.attachmentFacing) // torch on wall
+                Facing.DOWN -> coord.offset(Facing.DOWN)
+                else -> coord.offset(state.attachmentFacing)
             }
 
             val isBasePowered = isBlockSoftOrHardPowered(baseCoord)
-            // A tocha inverte a base: base energizada -> tocha desliga (1 tick de atraso)
             val targetActive = !isBasePowered
 
             if (state.isActive != targetActive) {
@@ -242,11 +198,9 @@ class RedstoneEngine(val grid: CircuitGrid) {
         for ((coord, state) in all) {
             if (state.type != BlockType.REDSTONE_COMPARATOR) continue
 
-            // Entrada traseira
             val rearCoord = coord.offset(state.facing.opposite)
             val rearPower = getOutputPowerTowards(rearCoord, state.facing)
 
-            // Entradas laterais: pega o valor máximo entre esquerda e direita
             val leftCoord = coord.offset(state.facing.counterClockwise())
             val rightCoord = coord.offset(state.facing.clockwise())
             val leftPower = getSideSignal(leftCoord, state.facing.clockwise())
@@ -291,7 +245,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
                 BlockType.REDSTONE_REPEATER -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
                 BlockType.REDSTONE_COMPARATOR -> if (neighbor.facing == facing.opposite && neighbor.power > 0) return true
                 BlockType.REDSTONE_TORCH -> {
-                    // Tocha embaixo energiza fortemente o bloco acima
                     if (facing == Facing.DOWN && neighbor.isActive) return true
                 }
                 BlockType.REDSTONE_WIRE -> {
@@ -318,9 +271,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
         return false
     }
 
-    /**
-     * Propagação precisa do Pó de Redstone com atenuação de 1 por bloco.
-     */
     fun recalculateWireSignals() {
         val wires = HashMap<BlockCoord, BlockState>()
         val sourcesQueue = ArrayDeque<Pair<BlockCoord, Int>>()
@@ -332,7 +282,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
             }
         }
 
-        // 1. Identifica injeções diretas de energia na rede de fios
         for ((coord, wire) in wires) {
             var directPower = 0
 
@@ -368,9 +317,10 @@ class RedstoneEngine(val grid: CircuitGrid) {
             }
         }
 
-        // 2. Propaga sinais pela malha de fios com decaimento (-1 por bloco)
         while (sourcesQueue.isNotEmpty()) {
-            val (currentCoord, currentPower) = sourcesQueue.poll()
+            val item = sourcesQueue.removeFirst()
+            val currentCoord = item.first
+            val currentPower = item.second
             if (currentPower <= 1) continue
 
             val nextPower = currentPower - 1
@@ -378,17 +328,14 @@ class RedstoneEngine(val grid: CircuitGrid) {
             for (cardinal in Facing.CARDINALS) {
                 val neighborCoord = currentCoord.offset(cardinal)
 
-                // Nível 0: Mesmo plano Y
                 checkAndPropagateWire(neighborCoord, nextPower, wires, sourcesQueue)
 
-                // Nível +1: Subir 1 bloco (se o bloco acima do atual não for condutor sólido opaco)
                 val aboveCurrent = all[currentCoord.offset(Facing.UP)]
                 if (aboveCurrent == null || !aboveCurrent.type.isSolidConductor) {
                     val stepUpCoord = neighborCoord.offset(Facing.UP)
                     checkAndPropagateWire(stepUpCoord, nextPower, wires, sourcesQueue)
                 }
 
-                // Nível -1: Descer 1 bloco (se o bloco acima do destino não for condutor sólido opaco)
                 val aboveDest = all[neighborCoord]
                 if (aboveDest == null || !aboveDest.type.isSolidConductor) {
                     val stepDownCoord = neighborCoord.offset(Facing.DOWN)
@@ -397,7 +344,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
             }
         }
 
-        // 3. Grava de volta na grade
         for ((coord, wire) in wires) {
             grid.set(wire)
         }
@@ -449,7 +395,6 @@ class RedstoneEngine(val grid: CircuitGrid) {
                 }
 
                 BlockType.COPPER_BULB -> {
-                    // Comportamento T-Flip-Flop: alterna estado na borda de subida (rising edge: 0 -> >0)
                     if (isPowered && prevPower == 0) {
                         val newActive = !state.isActive
                         grid.set(state.copy(isActive = newActive, power = if (newActive) 15 else 0))
@@ -488,12 +433,10 @@ class RedstoneEngine(val grid: CircuitGrid) {
         val pushList = mutableListOf<BlockCoord>()
         var probe = pistonCoord.offset(facing)
 
-        // Limite de empurrão no Minecraft: até 12 blocos
         while (pushList.size < 12) {
             val block = grid.get(probe) ?: break
             if (block.type == BlockType.AIR) break
             if (block.type.isImmovable) {
-                // Obsidiana encontrada: pistão não consegue empurrar!
                 return
             }
             pushList.add(probe)
@@ -501,10 +444,9 @@ class RedstoneEngine(val grid: CircuitGrid) {
         }
 
         if (pushList.size >= 12 && grid.get(probe) != null && grid.get(probe)!!.type != BlockType.AIR) {
-            return // Limite de 12 blocos excedido
+            return
         }
 
-        // Move blocos do mais distante para o mais próximo
         for (i in pushList.indices.reversed()) {
             val fromCoord = pushList[i]
             val toCoord = fromCoord.offset(facing)

@@ -16,10 +16,8 @@ class RedstoneEngineTest {
     @Test
     fun testWireSignalDegradation() {
         val grid = CircuitGrid()
-        // Bloco de redstone em (0, 1, 0)
         grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.REDSTONE_BLOCK, power = 15))
 
-        // Linha de 16 fios de redstone
         for (x in 1..16) {
             grid.set(BlockState(BlockCoord(x, 1, 0), BlockType.REDSTONE_WIRE))
         }
@@ -43,12 +41,15 @@ class RedstoneEngineTest {
 
         val engine = RedstoneEngine(grid)
 
-        // Tick 0: saída desenergizada
+        // Tick 1: schedules repeater event with delay = 2
         engine.stepTick()
         assertEquals(0, grid.get(1, 1, 0)?.power)
         assertEquals(0, grid.get(2, 1, 0)?.power)
 
-        // Tick 2: repetidor dispara sinal 15
+        // Tick 2: delay decrements
+        engine.stepTick()
+
+        // Tick 3: repeater outputs full 15 power
         engine.stepTick()
         assertEquals(15, grid.get(1, 1, 0)?.power)
         assertEquals(15, grid.get(2, 1, 0)?.power)
@@ -57,7 +58,6 @@ class RedstoneEngineTest {
     @Test
     fun testTorchInversion() {
         val grid = CircuitGrid()
-        // Base de pedra lisa com tocha no topo
         grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.SMOOTH_STONE))
         grid.set(BlockState(BlockCoord(0, 2, 0), BlockType.REDSTONE_TORCH, attachmentFacing = Facing.DOWN, isActive = true, power = 15))
         grid.set(BlockState(BlockCoord(-1, 1, 0), BlockType.LEVER, isActive = false, facing = Facing.EAST))
@@ -71,7 +71,9 @@ class RedstoneEngineTest {
         val lever = grid.get(-1, 1, 0)!!
         grid.set(lever.copy(isActive = true, power = 15))
 
-        // Tocha inverte com 1 tick de atraso
+        // Tick 1: detects base powered, schedules torch turn OFF with 1-tick delay
+        engine.stepTick()
+        // Tick 2: processes scheduled torch event
         engine.stepTick()
         assertFalse(grid.get(0, 2, 0)!!.isActive)
         assertEquals(0, grid.get(0, 2, 0)!!.power)
@@ -80,29 +82,23 @@ class RedstoneEngineTest {
     @Test
     fun testCopperBulbTFlipFlop() {
         val grid = CircuitGrid()
-        // Botão -> Lâmpada de Cobre
         grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.STONE_BUTTON, isActive = false))
         grid.set(BlockState(BlockCoord(1, 1, 0), BlockType.COPPER_BULB, isActive = false))
 
         val engine = RedstoneEngine(grid)
 
-        // Pressiona o botão (pulso de subida)
         val button = grid.get(0, 1, 0)!!
         grid.set(button.triggerButton())
 
         engine.stepTick()
-        // A lâmpada de cobre deve alternar para acesa (isActive = true)
         assertTrue(grid.get(1, 1, 0)!!.isActive)
 
-        // Pulso do botão acaba
         for (i in 1..10) {
             engine.stepTick()
         }
         assertEquals(0, grid.get(0, 1, 0)?.power)
-        // A lâmpada de cobre continua acesa (T-Flip-Flop)
         assertTrue(grid.get(1, 1, 0)!!.isActive)
 
-        // Segundo pulso de subida deve desligá-la
         grid.set(button.triggerButton())
         engine.stepTick()
         assertFalse(grid.get(1, 1, 0)!!.isActive)
@@ -111,16 +107,14 @@ class RedstoneEngineTest {
     @Test
     fun testPistonPushAndObsidianImmovable() {
         val grid = CircuitGrid()
-        // Pistão virado para LESTE
         grid.set(BlockState(BlockCoord(0, 1, 0), BlockType.PISTON, facing = Facing.EAST))
         grid.set(BlockState(BlockCoord(1, 1, 0), BlockType.SMOOTH_STONE))
-        grid.set(BlockState(BlockCoord(2, 1, 0), BlockType.OBSIDIAN)) // Imóvel
+        grid.set(BlockState(BlockCoord(2, 1, 0), BlockType.OBSIDIAN))
         grid.set(BlockState(BlockCoord(0, 1, 1), BlockType.LEVER, isActive = true, power = 15))
 
         val engine = RedstoneEngine(grid)
         engine.stepTick()
 
-        // Devido à Obsidiana, o pistão não pode estender nem mover os blocos
         assertFalse(grid.get(0, 1, 0)!!.isExtended)
         assertEquals(BlockType.SMOOTH_STONE, grid.get(1, 1, 0)?.type)
     }
