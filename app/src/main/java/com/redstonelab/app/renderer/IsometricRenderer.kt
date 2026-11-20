@@ -200,8 +200,8 @@ private fun DrawScope.drawCursor(center: Offset, hw: Float, hh: Float) {
         lineTo(center.x - hw, center.y)
         close()
     }
-    drawPath(path, NeonCyan.copy(alpha = 0.25f), Fill)
-    drawPath(path, NeonCyan, Stroke(width = 2.5f))
+    drawPath(path = path, color = NeonCyan.copy(alpha = 0.25f), style = Fill)
+    drawPath(path = path, color = NeonCyan, style = Stroke(width = 2.5f))
 }
 
 private fun DrawScope.drawIsometricBlock(
@@ -414,7 +414,7 @@ private fun DrawScope.drawSolidCube(
         lineTo(center.x - hw, center.y - elev)
         close()
     }
-    drawPath(topPath, topColor, Fill)
+    drawPath(path = topPath, color = topColor, style = Fill)
 
     val leftPath = Path().apply {
         moveTo(center.x - hw, center.y - elev)
@@ -423,7 +423,7 @@ private fun DrawScope.drawSolidCube(
         lineTo(center.x - hw, center.y)
         close()
     }
-    drawPath(leftPath, leftColor, Fill)
+    drawPath(path = leftPath, color = leftColor, style = Fill)
 
     val rightPath = Path().apply {
         moveTo(center.x, center.y + hh - elev)
@@ -432,11 +432,11 @@ private fun DrawScope.drawSolidCube(
         lineTo(center.x, center.y + hh)
         close()
     }
-    drawPath(rightPath, rightColor, Fill)
+    drawPath(path = rightPath, color = rightColor, style = Fill)
 
-    drawPath(topPath, GlassBorderSubtle, Stroke(width = 1.0f))
-    drawPath(leftPath, GlassBorderSubtle, Stroke(width = 1.0f))
-    drawPath(rightPath, GlassBorderSubtle, Stroke(width = 1.0f))
+    drawPath(path = topPath, color = GlassBorderSubtle, style = Stroke(width = 1.0f))
+    drawPath(path = leftPath, color = GlassBorderSubtle, style = Stroke(width = 1.0f))
+    drawPath(path = rightPath, color = GlassBorderSubtle, style = Stroke(width = 1.0f))
 
     if (glowColor != null) {
         drawCircle(
@@ -465,8 +465,8 @@ private fun DrawScope.drawGhostCube(
         lineTo(center.x - hw, center.y - elev)
         close()
     }
-    drawPath(topPath, ghostColor, Fill)
-    drawPath(topPath, ghostBorder, Stroke(width = 1.0f))
+    drawPath(path = topPath, color = ghostColor, style = Fill)
+    drawPath(path = topPath, color = ghostBorder, style = Stroke(width = 1.0f))
 }
 
 private fun DrawScope.drawGlassCube(
@@ -674,7 +674,7 @@ private fun DrawScope.drawLever(
         lineTo(center.x - hw * 0.4f, center.y)
         close()
     }
-    drawPath(mountPath, StoneGray.copy(alpha = alpha), Fill)
+    drawPath(path = mountPath, color = StoneGray.copy(alpha = alpha), style = Fill)
 
     val angleX = if (block.isActive) 8f else -8f
     drawLine(
@@ -707,8 +707,8 @@ private fun DrawScope.drawButton(
         close()
     }
     val buttonColor = if (block.pulseTicksLeft > 0) NeonCyan.copy(alpha = alpha) else StoneGrayLight.copy(alpha = alpha)
-    drawPath(buttonPath, buttonColor, Fill)
-    drawPath(buttonPath, GlassBorderSubtle, Stroke(width = 1.0f))
+    drawPath(path = buttonPath, color = buttonColor, style = Fill)
+    drawPath(path = buttonPath, color = GlassBorderSubtle, style = Stroke(width = 1.0f))
 }
 
 private fun DrawScope.drawPressurePlate(
