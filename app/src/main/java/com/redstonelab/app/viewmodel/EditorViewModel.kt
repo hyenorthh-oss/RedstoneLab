@@ -225,15 +225,15 @@ class EditorViewModel : ViewModel() {
     // --- Controles de Câmera 3D ---
 
     fun rotateCameraClockwise() {
-        cameraAngle = (cameraAngle + 90f) % 360f
+        cameraRotation = (cameraRotation + 1) % 4
     }
 
     fun rotateCameraCounterClockwise() {
-        cameraAngle = ((cameraAngle - 90f) % 360f + 360f) % 360f
+        cameraRotation = (cameraRotation - 1 + 4) % 4
     }
 
     fun resetCamera() {
-        cameraAngle = 0f
+        cameraRotation = 0
     }
 
     // --- Controles de Simulação ---
